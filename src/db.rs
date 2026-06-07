@@ -51,7 +51,7 @@ impl Db {
             CREATE TABLE IF NOT EXISTS items (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 shortname   TEXT UNIQUE NOT NULL,
-                item_type   TEXT NOT NULL CHECK(item_type IN ('url','note','secret')),
+                item_type   TEXT NOT NULL CHECK(item_type IN ('url','note')),
                 content_enc BLOB NOT NULL,
                 nonce       BLOB NOT NULL,
                 created_at  TEXT NOT NULL,
@@ -436,7 +436,7 @@ mod tests {
     #[test]
     fn delete_item() {
         let db = mem_db();
-        db.insert_item("k", "secret", b"e", b"n").unwrap();
+        db.insert_item("k", "note", b"e", b"n").unwrap();
         db.delete_item("k").unwrap();
         assert!(!db.item_exists("k").unwrap());
     }
@@ -554,7 +554,7 @@ mod tests {
         let db = mem_db();
         db.insert_item("a", "note", b"e1", b"n1").unwrap();
         db.insert_item("b", "url", b"e2", b"n2").unwrap();
-        db.insert_item("c", "secret", b"e3", b"n3").unwrap();
+        db.insert_item("c", "note", b"e3", b"n3").unwrap();
         assert_eq!(db.list_items().unwrap().len(), 3);
     }
 
