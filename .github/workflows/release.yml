@@ -27,11 +27,6 @@ jobs:
             archive_ext: tar.gz
             extra_apt: musl-tools
 
-          - os: macos-13
-            target: x86_64-apple-darwin
-            artifact_name: stash-macos-x86_64
-            archive_ext: tar.gz
-
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: stash-macos-aarch64
