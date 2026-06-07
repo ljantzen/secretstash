@@ -60,10 +60,14 @@ pub fn login(db_path: &std::path::Path, session_timeout_minutes: u64) -> Result<
     }
 
     session::save_key(&key, session_timeout_minutes)?;
-    println!(
-        "Logged in. Session expires in {} minute(s).",
-        session_timeout_minutes
-    );
+    if session_timeout_minutes == 0 {
+        println!("Logged in. Session does not expire.");
+    } else {
+        println!(
+            "Logged in. Session expires in {} minute(s).",
+            session_timeout_minutes
+        );
+    }
     Ok(())
 }
 
