@@ -3,6 +3,7 @@ mod commands;
 mod config;
 mod crypto;
 mod db;
+mod keychain;
 mod session;
 
 use std::path::PathBuf;
@@ -50,20 +51,48 @@ fn main() -> Result<()> {
             text.as_deref(),
             &db_path,
         ),
-        Commands::Show { verbose, shortname } => {
-            commands::show::show(&shortname, verbose, &db_path)
-        }
+        Commands::Show {
+            verbose,
+            copy,
+            shortname,
+        } => commands::show::show(&shortname, verbose, copy, &db_path),
         Commands::History { shortname } => commands::history::history(&shortname, &db_path),
         Commands::Edit { shortname } => commands::edit::edit(&shortname, &db_path),
-        Commands::Web { private, shortname } => commands::web::web(&shortname, private, &db_path),
-        Commands::Purge { shortname } => commands::purge::purge(&shortname, &db_path),
-        Commands::List { tags } => commands::list::list(&tags, &db_path),
+        Commands::Web {
+            private,
+            browser,
+            shortname,
+        } => {
+            let effective_browser = browser.or(cfg.browser);
+            commands::web::web(&shortname, private, effective_browser.as_deref(), &db_path)
+        }
+        Commands::Purge { force, shortname } => commands::purge::purge(&shortname, force, &db_path),
+        Commands::List { tags, item_type } => commands::list::list(
+            &tags,
+            item_type.as_ref().map(|t| t.to_string()).as_deref(),
+            &db_path,
+        ),
         Commands::Tag { shortname, tags } => commands::tag::add_tags(&shortname, &tags, &db_path),
         Commands::Untag { shortname, tags } => {
             commands::tag::remove_tags(&shortname, &tags, &db_path)
         }
-        Commands::Find { query, tag } => {
-            commands::find::find(query.as_deref(), tag.as_deref(), &db_path)
+        Commands::Find {
+            query,
+            tag,
+            item_type,
+        } => commands::find::find(
+            query.as_deref(),
+            tag.as_deref(),
+            item_type.as_ref().map(|t| t.to_string()).as_deref(),
+            &db_path,
+        ),
+        Commands::Rename {
+            shortname,
+            new_name,
+        } => commands::rename::rename(&shortname, &new_name, &db_path),
+        Commands::Restore { shortname, version } => {
+            commands::restore::restore(&shortname, version, &db_path)
         }
+        Commands::Copy { shortname, dest } => commands::copy::copy(&shortname, &dest, &db_path),
     }
 }
