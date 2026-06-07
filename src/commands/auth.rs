@@ -1,13 +1,12 @@
 use anyhow::{Result, anyhow};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 
-use crate::{config, crypto, db::Db, session};
+use crate::{crypto, db::Db, session};
 
 const CANARY: &[u8] = b"stash-auth-canary-v1";
 
-pub fn login() -> Result<()> {
-    let db_path = config::db_path()?;
-    let db = Db::open(&db_path)?;
+pub fn login(db_path: &std::path::Path, session_timeout_minutes: u64) -> Result<()> {
+    let db = Db::open(db_path)?;
 
     let is_new_vault = db.get_meta("salt")?.is_none();
 
@@ -56,8 +55,11 @@ pub fn login() -> Result<()> {
         }
     }
 
-    session::save_key(&key)?;
-    println!("Logged in.");
+    session::save_key(&key, session_timeout_minutes)?;
+    println!(
+        "Logged in. Session expires in {} minute(s).",
+        session_timeout_minutes
+    );
     Ok(())
 }
 

@@ -1,11 +1,10 @@
 use anyhow::{Result, anyhow};
 
-use crate::{config, crypto, db::Db, session};
+use crate::{crypto, db::Db, session};
 
-pub fn web(shortname: &str, private: bool) -> Result<()> {
+pub fn web(shortname: &str, private: bool, db_path: &std::path::Path) -> Result<()> {
     let key = session::load_key()?;
-    let db_path = config::db_path()?;
-    let db = Db::open(&db_path)?;
+    let db = Db::open(db_path)?;
 
     let item = db
         .get_item(shortname)?

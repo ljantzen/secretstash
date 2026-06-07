@@ -1,10 +1,10 @@
 use anyhow::{Result, anyhow};
 
-use crate::{config, crypto, db::Db, session};
+use crate::{crypto, db::Db, session};
 
-pub fn add_tags(shortname: &str, new_tags: &[String]) -> Result<()> {
+pub fn add_tags(shortname: &str, new_tags: &[String], db_path: &std::path::Path) -> Result<()> {
     let key = session::load_key()?;
-    let db = Db::open(&config::db_path()?)?;
+    let db = Db::open(db_path)?;
 
     let item = db
         .get_item(shortname)?
@@ -37,9 +37,9 @@ pub fn add_tags(shortname: &str, new_tags: &[String]) -> Result<()> {
     Ok(())
 }
 
-pub fn remove_tags(shortname: &str, remove: &[String]) -> Result<()> {
+pub fn remove_tags(shortname: &str, remove: &[String], db_path: &std::path::Path) -> Result<()> {
     let key = session::load_key()?;
-    let db = Db::open(&config::db_path()?)?;
+    let db = Db::open(db_path)?;
 
     let item = db
         .get_item(shortname)?

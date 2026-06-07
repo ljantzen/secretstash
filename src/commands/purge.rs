@@ -1,12 +1,11 @@
 use anyhow::{Result, anyhow};
 use std::io::{self, BufRead, Write};
 
-use crate::{config, db::Db, session};
+use crate::{db::Db, session};
 
-pub fn purge(shortname: &str) -> Result<()> {
+pub fn purge(shortname: &str, db_path: &std::path::Path) -> Result<()> {
     session::load_key()?;
-    let db_path = config::db_path()?;
-    let db = Db::open(&db_path)?;
+    let db = Db::open(db_path)?;
 
     if !db.item_exists(shortname)? {
         return Err(anyhow!("Item '{}' not found", shortname));

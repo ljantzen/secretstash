@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
@@ -7,6 +9,10 @@ use clap::{Parser, Subcommand, ValueEnum};
     version
 )]
 pub struct Cli {
+    /// Use this database file instead of the default
+    #[arg(long, value_name = "FILE", global = true)]
+    pub db: Option<PathBuf>,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -58,6 +64,12 @@ pub enum Commands {
     },
     /// Delete an item and its entire history
     Purge { shortname: String },
+    /// List all items, optionally filtered by tag(s)
+    List {
+        /// Show items that have ANY of the specified tags (repeatable)
+        #[arg(short = 'g', long = "tag", value_name = "TAG")]
+        tags: Vec<String>,
+    },
     /// Add tags to an existing item
     Tag {
         shortname: String,
@@ -291,6 +303,38 @@ mod tests {
         assert!(matches!(cli.command, Commands::Web { private: true, .. }));
     }
 
+    // ── list ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn list_no_filter() {
+        let cli = parse(&["stash", "list"]).unwrap();
+        if let Commands::List { tags } = cli.command {
+            assert!(tags.is_empty());
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn list_single_tag() {
+        let cli = parse(&["stash", "list", "--tag", "work"]).unwrap();
+        if let Commands::List { tags } = cli.command {
+            assert_eq!(tags, ["work"]);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn list_multiple_tags() {
+        let cli = parse(&["stash", "list", "-g", "work", "-g", "personal"]).unwrap();
+        if let Commands::List { tags } = cli.command {
+            assert_eq!(tags, ["work", "personal"]);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
     // ── other subcommands ─────────────────────────────────────────────────
 
     #[test]
@@ -387,6 +431,32 @@ mod tests {
         } else {
             panic!("wrong variant");
         }
+    }
+
+    // ── --db global flag ─────────────────────────────────────────────────
+
+    #[test]
+    fn db_flag_before_subcommand() {
+        let cli = parse(&["stash", "--db", "/tmp/test.db", "list"]).unwrap();
+        assert_eq!(
+            cli.db.as_deref(),
+            Some(std::path::Path::new("/tmp/test.db"))
+        );
+    }
+
+    #[test]
+    fn db_flag_after_subcommand() {
+        let cli = parse(&["stash", "list", "--db", "/tmp/test.db"]).unwrap();
+        assert_eq!(
+            cli.db.as_deref(),
+            Some(std::path::Path::new("/tmp/test.db"))
+        );
+    }
+
+    #[test]
+    fn db_flag_absent() {
+        let cli = parse(&["stash", "list"]).unwrap();
+        assert!(cli.db.is_none());
     }
 
     // ── ItemType display ──────────────────────────────────────────────────

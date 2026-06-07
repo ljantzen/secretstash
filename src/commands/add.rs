@@ -1,7 +1,7 @@
 use anyhow::{Result, anyhow};
 use std::io::{self, Read, Write};
 
-use crate::{cli::ItemType, config, crypto, db::Db, session};
+use crate::{cli::ItemType, crypto, db::Db, session};
 
 pub fn add(
     item_type: ItemType,
@@ -10,14 +10,14 @@ pub fn add(
     from_stdin: bool,
     tags: &[String],
     text: Option<&str>,
+    db_path: &std::path::Path,
 ) -> Result<()> {
     if edit && from_stdin {
         return Err(anyhow!("Cannot use --edit and --stdin together"));
     }
 
     let key = session::load_key()?;
-    let db_path = config::db_path()?;
-    let db = Db::open(&db_path)?;
+    let db = Db::open(db_path)?;
 
     if db.item_exists(shortname)? {
         return Err(anyhow!(

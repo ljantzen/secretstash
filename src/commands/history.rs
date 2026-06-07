@@ -1,12 +1,11 @@
 use anyhow::{Result, anyhow};
 
 use super::show::fmt_ts;
-use crate::{config, crypto, db::Db, session};
+use crate::{crypto, db::Db, session};
 
-pub fn history(shortname: &str) -> Result<()> {
+pub fn history(shortname: &str, db_path: &std::path::Path) -> Result<()> {
     let key = session::load_key()?;
-    let db_path = config::db_path()?;
-    let db = Db::open(&db_path)?;
+    let db = Db::open(db_path)?;
 
     let item = db
         .get_item(shortname)?

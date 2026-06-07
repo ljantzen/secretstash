@@ -1,15 +1,19 @@
 use anyhow::{Result, anyhow};
 
 use super::tag::decrypt_tags;
-use crate::{config, crypto, db::Db, session};
+use crate::{crypto, db::Db, session};
 
-pub fn find(query: Option<&str>, tag_filter: Option<&str>) -> Result<()> {
+pub fn find(
+    query: Option<&str>,
+    tag_filter: Option<&str>,
+    db_path: &std::path::Path,
+) -> Result<()> {
     if query.is_none() && tag_filter.is_none() {
         return Err(anyhow!("Provide a search term, --tag <TAG>, or both."));
     }
 
     let key = session::load_key()?;
-    let db = Db::open(&config::db_path()?)?;
+    let db = Db::open(db_path)?;
     let items = db.list_items()?;
 
     if items.is_empty() {
