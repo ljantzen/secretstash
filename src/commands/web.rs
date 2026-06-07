@@ -39,7 +39,10 @@ pub fn web(
     let url = String::from_utf8(content.to_vec())?.trim().to_string();
 
     // Priority: --browser flag > per-item stored browser > config browser > system default
-    let browser = cli_browser.or(item.browser.as_deref()).or(cfg_browser);
+    let browser = cli_browser
+        .or(item.browser.as_deref())
+        .or(cfg_browser)
+        .map(normalize_browser);
 
     match (browser, private) {
         (Some(b), false) => open_with(b, &url),
@@ -107,10 +110,39 @@ fn open_private_discover(url: &str) -> Result<()> {
     ))
 }
 
+fn normalize_browser(browser: &str) -> &str {
+    match browser {
+        "chrome" => "google-chrome",
+        other => other,
+    }
+}
+
 fn browser_err(browser: &str, e: std::io::Error) -> anyhow::Error {
     if e.kind() == std::io::ErrorKind::NotFound {
         anyhow!("Browser '{}' not found", browser)
     } else {
         e.into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chrome_normalizes_to_google_chrome() {
+        assert_eq!(normalize_browser("chrome"), "google-chrome");
+    }
+
+    #[test]
+    fn known_browsers_pass_through_unchanged() {
+        for (name, _) in PRIVATE_FLAGS {
+            assert_eq!(normalize_browser(name), *name);
+        }
+    }
+
+    #[test]
+    fn unknown_browser_passes_through() {
+        assert_eq!(normalize_browser("opera"), "opera");
     }
 }

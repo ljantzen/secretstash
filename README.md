@@ -85,6 +85,7 @@ stash auth login
 # Add items
 stash add --type note  --shortname todo  "Buy milk"
 stash add --type url   --shortname gh    "https://github.com"
+stash add --type url   --shortname work  "https://example.com" --browser firefox
 
 # Add items with tags
 stash add --type note --shortname todo --tag work --tag personal "Buy milk"
@@ -138,6 +139,10 @@ stash find --tag work
 stash find --type url
 stash find --type url "github"
 
+# Change or clear the stored browser preference for a URL item
+stash browser gh firefox
+stash browser gh --clear
+
 # Delete an item and all its history
 stash purge todo
 stash purge todo --force        # skip confirmation (useful in scripts)
@@ -190,6 +195,7 @@ stash add -t/--type <url|note> -s/--shortname <name> [options] [TEXT]
 | `-e`, `--edit` | Open `$EDITOR` to compose content |
 | `--stdin` | Read content from standard input |
 | `-g`, `--tag <TAG>` | Attach a tag (repeatable: `--tag work --tag personal`) |
+| `-b`, `--browser <BROWSER>` | Store a preferred browser for this URL item (url items only) |
 | `TEXT` | Inline content as a positional argument |
 
 Exactly one of `--edit`, `--stdin`, or positional `TEXT` must be supplied.
@@ -220,8 +226,11 @@ private/incognito mode. Pass `-b` / `--browser` to specify a browser binary
 `stash.toml`. Without a specified browser, the system default is used (or, for
 `--private`, tries Firefox, Chrome, Chromium, Brave, and Vivaldi in order).
 
+Browser resolution order: `--browser` flag > per-item stored browser (`stash browser`) > `browser` in `stash.toml` > system default.
+
 Private-mode flags are known for: `firefox` (`--private-window`),
-`google-chrome`, `chromium`, `chromium-browser`, `brave-browser`, `vivaldi`, `vivaldi-stable` (`--incognito`).
+`google-chrome` / `chrome`, `chromium`, `chromium-browser`, `brave-browser`, `vivaldi`, `vivaldi-stable` (`--incognito`).
+`chrome` is accepted as an alias for `google-chrome`.
 
 ### `stash list`
 
@@ -273,6 +282,16 @@ Renames an item. Fails if `<new-name>` is already in use.
 
 Copies an item (content, type, and tags) to a new shortname. History is not
 copied. Each field is re-encrypted with a fresh nonce.
+
+### `stash browser <shortname> [<browser> | --clear]`
+
+Sets or clears the preferred browser stored with a `url`-type item. This
+preference is used by `stash web` when no `--browser` flag is given.
+
+```sh
+stash browser gh firefox      # set stored browser
+stash browser gh --clear      # remove stored browser preference
+```
 
 ### `stash restore <shortname>`
 

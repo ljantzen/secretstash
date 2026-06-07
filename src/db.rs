@@ -310,6 +310,17 @@ impl Db {
         }
     }
 
+    pub fn set_browser(&self, shortname: &str, browser: Option<&str>) -> Result<()> {
+        let n = self.conn.execute(
+            "UPDATE items SET browser=?1 WHERE shortname=?2",
+            params![browser, shortname],
+        )?;
+        if n == 0 {
+            return Err(anyhow!("Item '{}' not found", shortname));
+        }
+        Ok(())
+    }
+
     pub fn item_exists(&self, shortname: &str) -> Result<bool> {
         let count: i64 = self.conn.query_row(
             "SELECT COUNT(*) FROM items WHERE shortname=?1",

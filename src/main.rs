@@ -99,5 +99,10 @@ fn main() -> Result<()> {
             commands::restore::restore(&shortname, version, &db_path)
         }
         Commands::Copy { shortname, dest } => commands::copy::copy(&shortname, &dest, &db_path),
+        Commands::Browser {
+            shortname,
+            browser,
+            clear,
+        } => commands::browser::set_browser(&shortname, browser.as_deref(), clear, &db_path),
     }
 }

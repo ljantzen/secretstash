@@ -91,7 +91,7 @@ mod tests {
     fn decrypt_tags_empty() {
         let key = [0x42u8; 32];
         let (_f, db) = make_db();
-        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
         assert!(decrypt_tags(&db, &key, id).unwrap().is_empty());
     }
 
@@ -99,7 +99,7 @@ mod tests {
     fn decrypt_tags_roundtrip() {
         let key = [0x42u8; 32];
         let (_f, db) = make_db();
-        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
         for tag in ["work", "personal"] {
             let (enc, nonce) = crypto::encrypt(&key, tag.as_bytes()).unwrap();
             db.add_tag(id, &enc, &nonce).unwrap();
@@ -113,7 +113,7 @@ mod tests {
         let key = [0x42u8; 32];
         let wrong_key = [0x99u8; 32];
         let (_f, db) = make_db();
-        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
         let (enc, nonce) = crypto::encrypt(&key, b"work").unwrap();
         db.add_tag(id, &enc, &nonce).unwrap();
         assert!(decrypt_tags(&db, &wrong_key, id).is_err());

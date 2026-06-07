@@ -123,6 +123,15 @@ pub enum Commands {
     },
     /// Copy an item to a new shortname
     Copy { shortname: String, dest: String },
+    /// Set or clear the stored browser preference for a URL item
+    Browser {
+        shortname: String,
+        /// Browser binary to use (e.g. firefox, chromium)
+        browser: Option<String>,
+        /// Remove the stored browser preference
+        #[arg(long)]
+        clear: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -485,6 +494,50 @@ mod tests {
     fn db_flag_absent() {
         let cli = parse(&["stash", "list"]).unwrap();
         assert!(cli.db.is_none());
+    }
+
+    // ── browser ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn browser_set() {
+        let cli = parse(&["stash", "browser", "myurl", "firefox"]).unwrap();
+        if let Commands::Browser {
+            shortname,
+            browser,
+            clear,
+        } = cli.command
+        {
+            assert_eq!(shortname, "myurl");
+            assert_eq!(browser.as_deref(), Some("firefox"));
+            assert!(!clear);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn browser_clear() {
+        let cli = parse(&["stash", "browser", "myurl", "--clear"]).unwrap();
+        if let Commands::Browser {
+            shortname,
+            browser,
+            clear,
+        } = cli.command
+        {
+            assert_eq!(shortname, "myurl");
+            assert!(browser.is_none());
+            assert!(clear);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn browser_no_args_is_ok_at_parse_level() {
+        // Logic validation (missing both browser and --clear) happens at runtime,
+        // not at parse time, so clap accepts this.
+        let cli = parse(&["stash", "browser", "myurl"]).unwrap();
+        assert!(matches!(cli.command, Commands::Browser { .. }));
     }
 
     // ── ItemType display ──────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 pub mod add;
 pub mod auth;
+pub mod browser;
 pub mod copy;
 pub mod edit;
 pub mod find;
