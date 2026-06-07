@@ -6,25 +6,44 @@ use std::{
 };
 use zeroize::Zeroizing;
 
-pub fn load_key() -> Result<Zeroizing<[u8; 32]>> {
-    let path = crate::config::session_path()?;
-    let content = fs::read_to_string(&path)
-        .map_err(|_| anyhow!("Not authenticated. Run 'stash auth login' first."))?;
-    parse_session(content.trim())
-}
-
-pub fn save_key(key: &[u8; 32], timeout_minutes: u64) -> Result<()> {
-    let path = crate::config::session_path()?;
+/// Returns true if the session key was stored in the system keychain.
+pub fn save_key(key: &[u8; 32], timeout_minutes: u64) -> Result<bool> {
     let expiry = if timeout_minutes == 0 {
         u64::MAX
     } else {
         now_secs() + timeout_minutes * 60
     };
     let content = Zeroizing::new(format!("{}\n{}", expiry, B64.encode(key)));
-    write_session_file(&path, content.as_bytes())
+
+    let used_keychain = crate::keychain::save(&content);
+
+    // Always write the file as a fallback in case the keychain becomes
+    // unavailable between login and the next command.
+    let path = crate::config::session_path()?;
+    write_session_file(&path, content.as_bytes())?;
+
+    Ok(used_keychain)
+}
+
+pub fn load_key() -> Result<Zeroizing<[u8; 32]>> {
+    // Try keychain first; clear it and fall through on any error.
+    if let Some(content) = crate::keychain::load() {
+        let result = parse_session(content.trim());
+        if result.is_err() {
+            crate::keychain::clear();
+        }
+        return result;
+    }
+
+    // Fall back to session file.
+    let path = crate::config::session_path()?;
+    let content = fs::read_to_string(&path)
+        .map_err(|_| anyhow!("Not authenticated. Run 'stash auth login' first."))?;
+    parse_session(content.trim())
 }
 
 pub fn clear_key() -> Result<()> {
+    crate::keychain::clear();
     let path = crate::config::session_path()?;
     if path.exists() {
         fs::remove_file(path)?;
