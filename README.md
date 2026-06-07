@@ -11,6 +11,7 @@ Each item is identified by a short name and versioned: every edit is archived so
 
 - **Three item types** — `note`, `url`, `secret`
 - **Encrypted at rest** — ChaCha20-Poly1305 field-level encryption; Argon2id key derivation
+- **Tags** — attach multiple encrypted tags to any item; filter and search by tag
 - **Version history** — every edit is archived; nothing is silently overwritten
 - **Editor integration** — `$EDITOR` opens for composing or editing any item
 - **Browser integration** — open URL items directly, with optional private/incognito mode
@@ -40,6 +41,31 @@ Requires Rust 1.75+.
 cargo install --path .
 ```
 
+## Configuration
+
+### Config file
+
+stash reads `~/.config/stash/stash.toml` on startup (macOS:
+`~/Library/Application Support/stash/stash.toml`). Create the directory and
+file if it does not exist.
+
+```toml
+# ~/.config/stash/stash.toml
+db = "/mnt/usb/stash.db"
+session_timeout_minutes = 60   # default: 15
+```
+
+### Alternate database
+
+The database path is resolved in this order (first match wins):
+
+| Source | Example |
+|--------|---------|
+| `--db` flag | `stash --db /tmp/test.db list` |
+| `STASH_DB` env var | `export STASH_DB=/mnt/usb/stash.db` |
+| `db` in `stash.toml` | `db = "/mnt/usb/stash.db"` |
+| Default | `~/.local/share/stash/stash.db` |
+
 ## Data storage
 
 | File | Purpose |
@@ -60,6 +86,9 @@ stash add --type note   --shortname todo        "Buy milk"
 stash add --type url    --shortname gh          "https://github.com"
 stash add --type secret --shortname aws-key     "AKIA..."
 
+# Add items with tags
+stash add --type note --shortname todo --tag work --tag personal "Buy milk"
+
 # Compose a longer note in your editor
 stash add --type note --shortname journal --edit
 
@@ -67,8 +96,8 @@ stash add --type note --shortname journal --edit
 echo "some text" | stash add --type note --shortname pipe --stdin
 
 # Show an item
-stash show todo                 # content only
-stash show todo --verbose       # content + metadata (type, timestamps)
+stash show todo                 # content only (tags printed if present)
+stash show todo --verbose       # content + metadata (type, timestamps, tags)
 
 # Edit an item (opens $EDITOR; old version is archived automatically)
 stash edit todo
@@ -79,6 +108,26 @@ stash history todo
 # Open a URL in the browser
 stash web gh
 stash web gh --private          # incognito / private mode
+
+# List all items
+stash list
+
+# List items filtered by tag (OR logic — shows items with any matching tag)
+stash list --tag work
+stash list --tag work --tag personal
+
+# Manage tags on existing items
+stash tag todo urgent
+stash untag todo personal
+
+# Search across all item content
+stash find "search term"
+
+# Search within a specific tag
+stash find --tag work "meeting"
+
+# List all items with a given tag (no content search)
+stash find --tag work
 
 # Delete an item and all its history
 stash purge todo
@@ -109,15 +158,18 @@ stash add -t/--type <url|note|secret> -s/--shortname <name> [options] [TEXT]
 |--------|-------------|
 | `-t`, `--type` | Item type: `url`, `note`, or `secret` (required) |
 | `-s`, `--shortname` | Identifier used in all other commands (required) |
-| `-e`, `--edit` | Open `$EDITOR` to compose content (pre-populated with TEXT if given) |
+| `-e`, `--edit` | Open `$EDITOR` to compose content |
 | `--stdin` | Read content from standard input |
+| `-g`, `--tag <TAG>` | Attach a tag (repeatable: `--tag work --tag personal`) |
 | `TEXT` | Inline content as a positional argument |
 
 Exactly one of `--edit`, `--stdin`, or positional `TEXT` must be supplied.
 
 ### `stash show <shortname>`
 
-Prints the item's content. Add `--verbose` / `-v` to also show the type and timestamps.
+Prints the item's content. If the item has tags they are shown on a `tags:` line
+after the content. Add `--verbose` / `-v` to also show the type, timestamps, and
+tags in a metadata header.
 
 ### `stash edit <shortname>`
 
@@ -134,6 +186,41 @@ its version number and timestamp.
 Opens a `url`-type item in the default browser. Pass `-p` / `--private` to open
 in private/incognito mode (tries Firefox, Chrome, Chromium, and Brave in order).
 
+### `stash list`
+
+```
+stash list [-g/--tag <TAG>]...
+```
+
+Lists all items in a table showing name, type, and tags. Pass one or more
+`-g`/`--tag` options to show only items that have **any** of the specified tags
+(OR logic).
+
+### `stash tag <shortname> <TAG>...`
+
+Adds one or more tags to an existing item. Duplicate tags are silently ignored.
+
+### `stash untag <shortname> <TAG>...`
+
+Removes one or more tags from an existing item. Tags not present on the item are
+silently ignored.
+
+### `stash find`
+
+```
+stash find [--tag <TAG>] [QUERY]
+```
+
+Searches items by content and/or tag (case-insensitive). At least one of `QUERY`
+or `--tag` is required.
+
+| Option | Description |
+|--------|-------------|
+| `QUERY` | Text to search for in item content |
+| `-g`, `--tag <TAG>` | Restrict results to items that have this tag |
+
+Results show the item name, type, and a snippet of matching content.
+
 ### `stash purge <shortname>`
 
 Deletes an item and its entire history after a confirmation prompt.
@@ -142,6 +229,8 @@ Deletes an item and its entire history after a confirmation prompt.
 
 - The database file is **not** encrypted as a whole; only the content fields are.
   Metadata (shortnames, types, timestamps) is stored in plaintext.
+- **Tags are encrypted** — each tag is encrypted individually with its own random
+  nonce, so tag values are never stored in plaintext.
 - The session file stores the raw 32-byte key in base64. It is written with
   mode 0600 and lives only as long as you stay logged in.
 - `$EDITOR` opens items in a temporary file. Some editors create swap or backup
