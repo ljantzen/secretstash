@@ -12,7 +12,7 @@ pub fn show(shortname: &str, verbose: bool, db_path: &std::path::Path) -> Result
         .ok_or_else(|| anyhow!("Item '{}' not found", shortname))?;
 
     let content = crypto::decrypt(&key, &item.content_enc, &item.nonce)?;
-    let text = String::from_utf8(content)?;
+    let text = String::from_utf8(content.to_vec())?;
 
     let mut tags = decrypt_tags(&db, &key, item.id)?;
     tags.sort();

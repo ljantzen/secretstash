@@ -1,10 +1,12 @@
 use anyhow::{Result, anyhow};
+use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use chacha20poly1305::{
     ChaCha20Poly1305, Key, Nonce,
     aead::{Aead, KeyInit},
 };
 use rand::{RngCore, rngs::OsRng};
+use zeroize::Zeroizing;
 
 pub fn generate_salt() -> String {
     let mut salt = [0u8; 32];
@@ -12,11 +14,12 @@ pub fn generate_salt() -> String {
     B64.encode(salt)
 }
 
-pub fn derive_key(password: &str, salt_b64: &str) -> Result<[u8; 32]> {
+pub fn derive_key(password: &str, salt_b64: &str) -> Result<Zeroizing<[u8; 32]>> {
     let salt = B64.decode(salt_b64)?;
-    let mut key = [0u8; 32];
-    argon2::Argon2::default()
-        .hash_password_into(password.as_bytes(), &salt, &mut key)
+    let mut key = Zeroizing::new([0u8; 32]);
+    let params = Params::new(65536, 4, 1, Some(32)).map_err(|e| anyhow!("Argon2 params: {e}"))?;
+    Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
+        .hash_password_into(password.as_bytes(), &salt, &mut *key)
         .map_err(|e| anyhow!("Key derivation failed: {e}"))?;
     Ok(key)
 }
@@ -32,11 +35,16 @@ pub fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<(Vec<u8>, Vec<u8>)> {
     Ok((ciphertext, nonce_bytes.to_vec()))
 }
 
-pub fn decrypt(key: &[u8; 32], ciphertext: &[u8], nonce_bytes: &[u8]) -> Result<Vec<u8>> {
+pub fn decrypt(
+    key: &[u8; 32],
+    ciphertext: &[u8],
+    nonce_bytes: &[u8],
+) -> Result<Zeroizing<Vec<u8>>> {
     let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
     let nonce = Nonce::from_slice(nonce_bytes);
     cipher
         .decrypt(nonce, ciphertext)
+        .map(Zeroizing::new)
         .map_err(|_| anyhow!("Decryption failed (wrong key or corrupted data)"))
 }
 
@@ -49,7 +57,7 @@ mod tests {
         let key = [0u8; 32];
         let plaintext = b"hello, stash!";
         let (ct, nonce) = encrypt(&key, plaintext).unwrap();
-        assert_eq!(decrypt(&key, &ct, &nonce).unwrap(), plaintext);
+        assert_eq!(decrypt(&key, &ct, &nonce).unwrap().as_slice(), plaintext);
     }
 
     #[test]

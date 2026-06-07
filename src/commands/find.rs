@@ -27,7 +27,7 @@ pub fn find(
 
     for item in items {
         let bytes = crypto::decrypt(&key, &item.content_enc, &item.nonce)?;
-        let text = String::from_utf8_lossy(&bytes).into_owned();
+        let text = String::from_utf8_lossy(bytes.as_slice()).into_owned();
 
         // Content filter
         if let Some(ref q) = query_lc

@@ -16,13 +16,15 @@ pub fn history(shortname: &str, db_path: &std::path::Path) -> Result<()> {
     println!("History for '{}' ({}):", item.shortname, item.item_type);
 
     for entry in &entries {
-        let text = String::from_utf8(crypto::decrypt(&key, &entry.content_enc, &entry.nonce)?)?;
+        let bytes = crypto::decrypt(&key, &entry.content_enc, &entry.nonce)?;
+        let text = String::from_utf8(bytes.to_vec())?;
         println!();
         println!("─── v{} ({}) ───", entry.version, fmt_ts(&entry.created_at));
         println!("{}", text.trim_end());
     }
 
-    let current = String::from_utf8(crypto::decrypt(&key, &item.content_enc, &item.nonce)?)?;
+    let bytes = crypto::decrypt(&key, &item.content_enc, &item.nonce)?;
+    let current = String::from_utf8(bytes.to_vec())?;
     println!();
     println!("─── current ({}) ───", fmt_ts(&item.updated_at));
     println!("{}", current.trim_end());

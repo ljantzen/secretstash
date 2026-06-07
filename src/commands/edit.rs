@@ -12,7 +12,7 @@ pub fn edit(shortname: &str, db_path: &std::path::Path) -> Result<()> {
         .ok_or_else(|| anyhow!("Item '{}' not found", shortname))?;
 
     let current_bytes = crypto::decrypt(&key, &item.content_enc, &item.nonce)?;
-    let current_text = String::from_utf8(current_bytes)?;
+    let current_text = String::from_utf8(current_bytes.to_vec())?;
 
     let new_text = open_in_editor(&current_text)?;
 
@@ -25,11 +25,15 @@ pub fn edit(shortname: &str, db_path: &std::path::Path) -> Result<()> {
         return Err(anyhow!("Content cannot be empty"));
     }
 
-    // Archive current version before overwriting
-    db.add_history(item.id, &item.content_enc, &item.nonce)?;
-
     let (enc, nonce) = crypto::encrypt(&key, new_text.as_bytes())?;
-    db.update_item(shortname, &enc, &nonce)?;
+    db.replace_content(
+        item.id,
+        shortname,
+        &item.content_enc,
+        &item.nonce,
+        &enc,
+        &nonce,
+    )?;
 
     println!("Updated '{}'.", shortname);
     Ok(())

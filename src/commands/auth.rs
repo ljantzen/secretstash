@@ -4,6 +4,7 @@ use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use crate::{crypto, db::Db, session};
 
 const CANARY: &[u8] = b"stash-auth-canary-v1";
+const MIN_PASSWORD_LEN: usize = 12;
 
 pub fn login(db_path: &std::path::Path, session_timeout_minutes: u64) -> Result<()> {
     let db = Db::open(db_path)?;
@@ -12,8 +13,11 @@ pub fn login(db_path: &std::path::Path, session_timeout_minutes: u64) -> Result<
 
     let password = if is_new_vault {
         let pw = rpassword::prompt_password("Create master password: ")?;
-        if pw.is_empty() {
-            return Err(anyhow!("Password cannot be empty"));
+        if pw.len() < MIN_PASSWORD_LEN {
+            return Err(anyhow!(
+                "Master password must be at least {} characters",
+                MIN_PASSWORD_LEN
+            ));
         }
         let confirm = rpassword::prompt_password("Confirm master password: ")?;
         if pw != confirm {
@@ -50,7 +54,7 @@ pub fn login(db_path: &std::path::Path, session_timeout_minutes: u64) -> Result<
         )?;
         let plaintext =
             crypto::decrypt(&key, &enc, &nonce).map_err(|_| anyhow!("Incorrect password"))?;
-        if plaintext != CANARY {
+        if plaintext.as_slice() != CANARY {
             return Err(anyhow!("Incorrect password"));
         }
     }

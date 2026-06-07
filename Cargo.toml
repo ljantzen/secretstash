@@ -22,3 +22,4 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 tempfile = "3"
 toml = "0.8"
+zeroize = "1"

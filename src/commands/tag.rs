@@ -51,7 +51,7 @@ pub fn remove_tags(shortname: &str, remove: &[String], db_path: &std::path::Path
     for tag_to_remove in remove {
         for raw in &raw_tags {
             let decrypted = crypto::decrypt(&key, &raw.tag_enc, &raw.nonce)?;
-            if String::from_utf8(decrypted)? == *tag_to_remove {
+            if String::from_utf8(decrypted.to_vec())? == *tag_to_remove {
                 db.delete_tag(raw.id)?;
                 removed += 1;
                 break;
@@ -71,7 +71,51 @@ pub fn decrypt_tags(db: &Db, key: &[u8; 32], item_id: i64) -> Result<Vec<String>
         .into_iter()
         .map(|t| {
             let b = crypto::decrypt(key, &t.tag_enc, &t.nonce)?;
-            Ok(String::from_utf8(b)?)
+            Ok(String::from_utf8(b.to_vec())?)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::NamedTempFile;
+
+    fn make_db() -> (NamedTempFile, Db) {
+        let f = NamedTempFile::new().unwrap();
+        let db = Db::open(f.path()).unwrap();
+        (f, db)
+    }
+
+    #[test]
+    fn decrypt_tags_empty() {
+        let key = [0x42u8; 32];
+        let (_f, db) = make_db();
+        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        assert!(decrypt_tags(&db, &key, id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn decrypt_tags_roundtrip() {
+        let key = [0x42u8; 32];
+        let (_f, db) = make_db();
+        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        for tag in ["work", "personal"] {
+            let (enc, nonce) = crypto::encrypt(&key, tag.as_bytes()).unwrap();
+            db.add_tag(id, &enc, &nonce).unwrap();
+        }
+        let tags = decrypt_tags(&db, &key, id).unwrap();
+        assert_eq!(tags, vec!["work", "personal"]);
+    }
+
+    #[test]
+    fn decrypt_tags_wrong_key_fails() {
+        let key = [0x42u8; 32];
+        let wrong_key = [0x99u8; 32];
+        let (_f, db) = make_db();
+        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let (enc, nonce) = crypto::encrypt(&key, b"work").unwrap();
+        db.add_tag(id, &enc, &nonce).unwrap();
+        assert!(decrypt_tags(&db, &wrong_key, id).is_err());
+    }
 }

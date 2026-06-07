@@ -19,7 +19,7 @@ pub fn web(shortname: &str, private: bool, db_path: &std::path::Path) -> Result<
     }
 
     let content = crypto::decrypt(&key, &item.content_enc, &item.nonce)?;
-    let url = String::from_utf8(content)?.trim().to_string();
+    let url = String::from_utf8(content.to_vec())?.trim().to_string();
 
     if private {
         open_private(&url)
