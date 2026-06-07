@@ -1,0 +1,31 @@
+use anyhow::{Result, anyhow};
+
+use super::show::fmt_ts;
+use crate::{config, crypto, db::Db, session};
+
+pub fn history(shortname: &str) -> Result<()> {
+    let key = session::load_key()?;
+    let db_path = config::db_path()?;
+    let db = Db::open(&db_path)?;
+
+    let item = db
+        .get_item(shortname)?
+        .ok_or_else(|| anyhow!("Item '{}' not found", shortname))?;
+
+    let entries = db.get_history(item.id)?;
+
+    println!("History for '{}' ({}):", item.shortname, item.item_type);
+
+    for entry in &entries {
+        let text = String::from_utf8(crypto::decrypt(&key, &entry.content_enc, &entry.nonce)?)?;
+        println!();
+        println!("─── v{} ({}) ───", entry.version, fmt_ts(&entry.created_at));
+        println!("{}", text.trim_end());
+    }
+
+    let current = String::from_utf8(crypto::decrypt(&key, &item.content_enc, &item.nonce)?)?;
+    println!();
+    println!("─── current ({}) ───", fmt_ts(&item.updated_at));
+    println!("{}", current.trim_end());
+    Ok(())
+}

@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.artifact_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: stash-linux-x86_64
+            archive_ext: tar.gz
+
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            artifact_name: stash-linux-x86_64-musl
+            archive_ext: tar.gz
+            extra_apt: musl-tools
+
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact_name: stash-macos-x86_64
+            archive_ext: tar.gz
+
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: stash-macos-aarch64
+            archive_ext: tar.gz
+
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: stash-windows-x86_64
+            archive_ext: zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install extra apt packages
+        if: matrix.extra_apt != ''
+        run: sudo apt-get install -y ${{ matrix.extra_apt }}
+
+      - name: Build
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package (Unix)
+        if: matrix.archive_ext == 'tar.gz'
+        run: |
+          tar czf "${{ matrix.artifact_name }}.tar.gz" \
+            -C target/${{ matrix.target }}/release stash
+
+      - name: Package (Windows)
+        if: matrix.archive_ext == 'zip'
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path "target\${{ matrix.target }}\release\stash.exe" `
+            -DestinationPath "${{ matrix.artifact_name }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}.${{ matrix.archive_ext }}
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
