@@ -32,7 +32,11 @@ pub struct Tag {
 impl Db {
     pub fn open(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)?;
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL; \
+             PRAGMA foreign_keys=ON; \
+             PRAGMA secure_delete=ON;",
+        )?;
         let db = Self { conn };
         db.migrate()?;
         Ok(db)
@@ -107,6 +111,7 @@ impl Db {
         Ok(self.conn.last_insert_rowid())
     }
 
+    #[cfg(test)]
     pub fn update_item(&self, shortname: &str, content_enc: &[u8], nonce: &[u8]) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
         let n = self.conn.execute(
@@ -142,6 +147,7 @@ impl Db {
         }
     }
 
+    #[cfg(test)]
     pub fn add_history(&self, item_id: i64, content_enc: &[u8], nonce: &[u8]) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
         let version: i64 = self.conn.query_row(
@@ -243,6 +249,43 @@ impl Db {
             |row| row.get(0),
         )?;
         Ok(count > 0)
+    }
+
+    /// Archive the current content as a history entry and write new content,
+    /// both within a single transaction so the vault is never in a partial state.
+    pub fn replace_content(
+        &self,
+        item_id: i64,
+        shortname: &str,
+        old_enc: &[u8],
+        old_nonce: &[u8],
+        new_enc: &[u8],
+        new_nonce: &[u8],
+    ) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        let now = chrono::Utc::now().to_rfc3339();
+
+        let version: i64 = tx.query_row(
+            "SELECT COALESCE(MAX(version), 0) + 1 FROM history WHERE item_id=?1",
+            params![item_id],
+            |row| row.get(0),
+        )?;
+        tx.execute(
+            "INSERT INTO history (item_id, content_enc, nonce, version, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![item_id, old_enc, old_nonce, version, now],
+        )?;
+
+        let n = tx.execute(
+            "UPDATE items SET content_enc=?1, nonce=?2, updated_at=?3 WHERE shortname=?4",
+            params![new_enc, new_nonce, now, shortname],
+        )?;
+        if n == 0 {
+            return Err(anyhow!("Item '{}' not found", shortname));
+        }
+
+        tx.commit()?;
+        Ok(())
     }
 }
 
@@ -487,5 +530,37 @@ mod tests {
         db.add_history(id, b"v2", b"n2").unwrap();
         db.delete_item("k").unwrap();
         assert!(db.get_history(id).unwrap().is_empty());
+    }
+
+    // ── replace_content ───────────────────────────────────────────────────
+
+    #[test]
+    fn replace_content_archives_old_and_writes_new() {
+        let db = mem_db();
+        let id = db
+            .insert_item("k", "note", b"old_enc", b"old_nonce")
+            .unwrap();
+        db.replace_content(id, "k", b"old_enc", b"old_nonce", b"new_enc", b"new_nonce")
+            .unwrap();
+        let item = db.get_item("k").unwrap().unwrap();
+        assert_eq!(item.content_enc, b"new_enc");
+        assert_eq!(item.nonce, b"new_nonce");
+        let history = db.get_history(id).unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].content_enc, b"old_enc");
+    }
+
+    #[test]
+    fn replace_content_increments_version() {
+        let db = mem_db();
+        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        db.replace_content(id, "k", b"e", b"n", b"e2", b"n2")
+            .unwrap();
+        db.replace_content(id, "k", b"e2", b"n2", b"e3", b"n3")
+            .unwrap();
+        let history = db.get_history(id).unwrap();
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].version, 1);
+        assert_eq!(history[1].version, 2);
     }
 }
