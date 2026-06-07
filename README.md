@@ -14,7 +14,7 @@ Each item is identified by a short name and versioned: every edit is archived so
 - **Tags** — attach multiple encrypted tags to any item; filter and search by tag
 - **Version history** — every edit is archived; nothing is silently overwritten
 - **Editor integration** — `$EDITOR` opens for composing or editing any item
-- **Browser integration** — open URL items directly, with optional private/incognito mode
+- **Browser integration** — open URL items directly, with optional private/incognito mode; store a per-item preferred browser
 - **Self-contained** — bundles SQLite; no external database or service required
 
 ## Installation
@@ -172,8 +172,10 @@ you to set a master password (minimum 12 characters). On subsequent runs, prompt
 for the existing password.
 
 The derived key is cached for up to `session_timeout_minutes` minutes (default
-15; 0 = no timeout). On macOS the key is stored in **Keychain**; on Linux it is
-stored in the **Secret Service** (GNOME Keyring / KWallet) if `secret-tool` is
+15; 0 = no timeout). The timeout is a **sliding window** — every stash command
+resets the clock, so the session only expires after that many minutes of
+inactivity. On macOS the key is stored in **Keychain**; on Linux it is stored
+in the **Secret Service** (GNOME Keyring / KWallet) if `secret-tool` is
 available. In both cases the session file (`~/.local/share/stash/.session`,
 mode 0600) is kept as a fallback. The login message notes `(keychain)` when the
 system keychain was used.
@@ -205,8 +207,8 @@ Exactly one of `--edit`, `--stdin`, or positional `TEXT` must be supplied.
 Prints the item's content. If the item has tags they are shown on a `tags:` line
 after the content. Add `--verbose` / `-v` to also show the type, timestamps, and
 tags in a metadata header. Add `--copy` / `-c` to copy the content to the
-clipboard instead of printing it (requires `pbcopy`, `wl-copy`, `xclip`, or
-`xsel`).
+clipboard instead of printing it (requires `pbcopy` on macOS, `wl-copy` on
+Wayland, `xclip` or `xsel` on X11, or `clip.exe` on Windows/WSL).
 
 ### `stash edit <shortname>`
 
@@ -231,6 +233,16 @@ Browser resolution order: `--browser` flag > per-item stored browser (`stash bro
 Private-mode flags are known for: `firefox` (`--private-window`),
 `google-chrome` / `chrome`, `chromium`, `chromium-browser`, `brave-browser`, `vivaldi`, `vivaldi-stable` (`--incognito`).
 `chrome` is accepted as an alias for `google-chrome`.
+
+### `stash browser <shortname> [<browser> | --clear]`
+
+Sets or clears the preferred browser stored with a `url`-type item. This
+preference is used by `stash web` when no `--browser` flag is given.
+
+```sh
+stash browser gh firefox      # set stored browser
+stash browser gh --clear      # remove stored browser preference
+```
 
 ### `stash list`
 
@@ -282,16 +294,6 @@ Renames an item. Fails if `<new-name>` is already in use.
 
 Copies an item (content, type, and tags) to a new shortname. History is not
 copied. Each field is re-encrypted with a fresh nonce.
-
-### `stash browser <shortname> [<browser> | --clear]`
-
-Sets or clears the preferred browser stored with a `url`-type item. This
-preference is used by `stash web` when no `--browser` flag is given.
-
-```sh
-stash browser gh firefox      # set stored browser
-stash browser gh --clear      # remove stored browser preference
-```
 
 ### `stash restore <shortname>`
 
