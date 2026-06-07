@@ -5,12 +5,12 @@ use chacha20poly1305::{
     ChaCha20Poly1305, Key, Nonce,
     aead::{Aead, KeyInit},
 };
-use rand::{RngCore, rngs::OsRng};
+use rand_core::{OsRng, TryRngCore};
 use zeroize::Zeroizing;
 
 pub fn generate_salt() -> String {
     let mut salt = [0u8; 32];
-    OsRng.fill_bytes(&mut salt);
+    OsRng.try_fill_bytes(&mut salt).expect("OS RNG failed");
     B64.encode(salt)
 }
 
@@ -27,7 +27,9 @@ pub fn derive_key(password: &str, salt_b64: &str) -> Result<Zeroizing<[u8; 32]>>
 pub fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<(Vec<u8>, Vec<u8>)> {
     let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
     let mut nonce_bytes = [0u8; 12];
-    OsRng.fill_bytes(&mut nonce_bytes);
+    OsRng
+        .try_fill_bytes(&mut nonce_bytes)
+        .expect("OS RNG failed");
     let nonce = Nonce::from_slice(&nonce_bytes);
     let ciphertext = cipher
         .encrypt(nonce, plaintext)
