@@ -3,6 +3,7 @@ pub mod auth;
 pub mod edit;
 pub mod find;
 pub mod history;
+pub mod list;
 pub mod purge;
 pub mod show;
 pub mod tag;
