@@ -277,7 +277,10 @@ mod tests {
     #[test]
     fn show_default_not_verbose() {
         let cli = parse(&["stash", "show", "k"]).unwrap();
-        if let Commands::Show { shortname, verbose } = cli.command {
+        if let Commands::Show {
+            shortname, verbose, ..
+        } = cli.command
+        {
             assert_eq!(shortname, "k");
             assert!(!verbose);
         } else {
@@ -302,7 +305,10 @@ mod tests {
     #[test]
     fn web_no_private() {
         let cli = parse(&["stash", "web", "myurl"]).unwrap();
-        if let Commands::Web { private, shortname } = cli.command {
+        if let Commands::Web {
+            private, shortname, ..
+        } = cli.command
+        {
             assert!(!private);
             assert_eq!(shortname, "myurl");
         } else {
@@ -327,7 +333,7 @@ mod tests {
     #[test]
     fn list_no_filter() {
         let cli = parse(&["stash", "list"]).unwrap();
-        if let Commands::List { tags } = cli.command {
+        if let Commands::List { tags, .. } = cli.command {
             assert!(tags.is_empty());
         } else {
             panic!("wrong variant");
@@ -337,7 +343,7 @@ mod tests {
     #[test]
     fn list_single_tag() {
         let cli = parse(&["stash", "list", "--tag", "work"]).unwrap();
-        if let Commands::List { tags } = cli.command {
+        if let Commands::List { tags, .. } = cli.command {
             assert_eq!(tags, ["work"]);
         } else {
             panic!("wrong variant");
@@ -347,7 +353,7 @@ mod tests {
     #[test]
     fn list_multiple_tags() {
         let cli = parse(&["stash", "list", "-g", "work", "-g", "personal"]).unwrap();
-        if let Commands::List { tags } = cli.command {
+        if let Commands::List { tags, .. } = cli.command {
             assert_eq!(tags, ["work", "personal"]);
         } else {
             panic!("wrong variant");
@@ -371,7 +377,7 @@ mod tests {
     #[test]
     fn parse_purge() {
         let cli = parse(&["stash", "purge", "k"]).unwrap();
-        assert!(matches!(cli.command, Commands::Purge { shortname } if shortname == "k"));
+        assert!(matches!(cli.command, Commands::Purge { shortname, .. } if shortname == "k"));
     }
 
     #[test]
@@ -422,7 +428,7 @@ mod tests {
     #[test]
     fn find_query_only() {
         let cli = parse(&["stash", "find", "search term"]).unwrap();
-        if let Commands::Find { query, tag } = cli.command {
+        if let Commands::Find { query, tag, .. } = cli.command {
             assert_eq!(query.as_deref(), Some("search term"));
             assert!(tag.is_none());
         } else {
@@ -433,7 +439,7 @@ mod tests {
     #[test]
     fn find_tag_only() {
         let cli = parse(&["stash", "find", "--tag", "work"]).unwrap();
-        if let Commands::Find { query, tag } = cli.command {
+        if let Commands::Find { query, tag, .. } = cli.command {
             assert!(query.is_none());
             assert_eq!(tag.as_deref(), Some("work"));
         } else {
@@ -444,7 +450,7 @@ mod tests {
     #[test]
     fn find_query_and_tag() {
         let cli = parse(&["stash", "find", "--tag", "work", "term"]).unwrap();
-        if let Commands::Find { query, tag } = cli.command {
+        if let Commands::Find { query, tag, .. } = cli.command {
             assert_eq!(query.as_deref(), Some("term"));
             assert_eq!(tag.as_deref(), Some("work"));
         } else {
