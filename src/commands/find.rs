@@ -6,10 +6,13 @@ use crate::{crypto, db::Db, session};
 pub fn find(
     query: Option<&str>,
     tag_filter: Option<&str>,
+    type_filter: Option<&str>,
     db_path: &std::path::Path,
 ) -> Result<()> {
-    if query.is_none() && tag_filter.is_none() {
-        return Err(anyhow!("Provide a search term, --tag <TAG>, or both."));
+    if query.is_none() && tag_filter.is_none() && type_filter.is_none() {
+        return Err(anyhow!(
+            "Provide a search term, --tag <TAG>, --type <TYPE>, or a combination."
+        ));
     }
 
     let key = session::load_key()?;
@@ -26,17 +29,21 @@ pub fn find(
     let mut results: Vec<(String, String, String)> = Vec::new();
 
     for item in items {
+        if let Some(t) = type_filter
+            && item.item_type != t
+        {
+            continue;
+        }
+
         let bytes = crypto::decrypt(&key, &item.content_enc, &item.nonce)?;
         let text = String::from_utf8_lossy(bytes.as_slice()).into_owned();
 
-        // Content filter
         if let Some(ref q) = query_lc
             && !text.to_lowercase().contains(q.as_str())
         {
             continue;
         }
 
-        // Tag filter
         if let Some(ref tf) = tag_lc {
             let tags = decrypt_tags(&db, &key, item.id)?;
             if !tags.iter().any(|t| t.to_lowercase() == *tf) {
@@ -52,12 +59,7 @@ pub fn find(
     }
 
     if results.is_empty() {
-        match (query, tag_filter) {
-            (Some(q), Some(t)) => println!("No matches for \"{}\" with tag \"{}\".", q, t),
-            (Some(q), None) => println!("No matches for \"{}\".", q),
-            (None, Some(t)) => println!("No items tagged \"{}\".", t),
-            (None, None) => unreachable!(),
-        }
+        println!("No matches.");
         return Ok(());
     }
 
@@ -68,13 +70,7 @@ pub fn find(
     }
 
     println!();
-    let label = match (query, tag_filter) {
-        (Some(q), Some(t)) => format!("\"{}\" + tag \"{}\"", q, t),
-        (Some(q), None) => format!("\"{}\"", q),
-        (None, Some(t)) => format!("tag \"{}\"", t),
-        (None, None) => unreachable!(),
-    };
-    println!("{} result(s) for {}.", results.len(), label);
+    println!("{} result(s).", results.len());
     Ok(())
 }
 

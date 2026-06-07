@@ -3,7 +3,7 @@ use anyhow::{Result, anyhow};
 use super::tag::decrypt_tags;
 use crate::{crypto, db::Db, session};
 
-pub fn show(shortname: &str, verbose: bool, db_path: &std::path::Path) -> Result<()> {
+pub fn show(shortname: &str, verbose: bool, copy: bool, db_path: &std::path::Path) -> Result<()> {
     let key = session::load_key()?;
     let db = Db::open(db_path)?;
 
@@ -13,6 +13,12 @@ pub fn show(shortname: &str, verbose: bool, db_path: &std::path::Path) -> Result
 
     let content = crypto::decrypt(&key, &item.content_enc, &item.nonce)?;
     let text = String::from_utf8(content.to_vec())?;
+
+    if copy {
+        copy_to_clipboard(text.trim_end())?;
+        println!("Copied '{}' to clipboard.", shortname);
+        return Ok(());
+    }
 
     let mut tags = decrypt_tags(&db, &key, item.id)?;
     tags.sort();
@@ -33,6 +39,35 @@ pub fn show(shortname: &str, verbose: bool, db_path: &std::path::Path) -> Result
         println!("tags: {}", tags.join(", "));
     }
     Ok(())
+}
+
+fn copy_to_clipboard(text: &str) -> Result<()> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    let candidates: &[(&str, &[&str])] = &[
+        ("pbcopy", &[]),                         // macOS
+        ("wl-copy", &[]),                        // Wayland
+        ("xclip", &["-selection", "clipboard"]), // X11
+        ("xsel", &["--clipboard", "--input"]),   // X11 alt
+    ];
+
+    for (cmd, args) in candidates {
+        match Command::new(cmd).args(*args).stdin(Stdio::piped()).spawn() {
+            Ok(mut child) => {
+                child.stdin.take().unwrap().write_all(text.as_bytes())?;
+                child.wait()?;
+                return Ok(());
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(e.into()),
+        }
+    }
+
+    Err(anyhow!(
+        "No clipboard command found. \
+         Install pbcopy (macOS), wl-clipboard (Wayland), or xclip/xsel (X11)."
+    ))
 }
 
 pub fn fmt_ts(ts: &str) -> String {

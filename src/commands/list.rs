@@ -3,7 +3,11 @@ use anyhow::Result;
 use super::tag::decrypt_tags;
 use crate::{db::Db, session};
 
-pub fn list(tag_filters: &[String], db_path: &std::path::Path) -> Result<()> {
+pub fn list(
+    tag_filters: &[String],
+    type_filter: Option<&str>,
+    db_path: &std::path::Path,
+) -> Result<()> {
     let key = session::load_key()?;
     let db = Db::open(db_path)?;
     let items = db.list_items()?;
@@ -17,6 +21,12 @@ pub fn list(tag_filters: &[String], db_path: &std::path::Path) -> Result<()> {
 
     let mut rows: Vec<(String, String, Vec<String>)> = Vec::new();
     for item in items {
+        if let Some(t) = type_filter
+            && item.item_type != t
+        {
+            continue;
+        }
+
         let mut tags = decrypt_tags(&db, &key, item.id)?;
         tags.sort();
 
@@ -48,7 +58,7 @@ pub fn list(tag_filters: &[String], db_path: &std::path::Path) -> Result<()> {
         .max()
         .unwrap_or(4)
         .max("NAME".len());
-    let type_w = "secret".len(); // widest possible type
+    let type_w = "note".len();
 
     println!("{:<name_w$}  {:<type_w$}  TAGS", "NAME", "TYPE");
     println!("{}", "─".repeat(name_w + 2 + type_w + 2 + 20));
