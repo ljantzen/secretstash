@@ -13,12 +13,10 @@ pub fn save_key(key: &[u8; 32], timeout_minutes: u64) -> Result<bool> {
     } else {
         now_secs() + timeout_minutes * 60
     };
-    let content = Zeroizing::new(format!("{}\n{}", expiry, B64.encode(key)));
+    let content = encode_session(expiry, timeout_minutes, key);
 
     let used_keychain = crate::keychain::save(&content);
 
-    // Always write the file as a fallback in case the keychain becomes
-    // unavailable between login and the next command.
     let path = crate::config::session_path()?;
     write_session_file(&path, content.as_bytes())?;
 
@@ -28,18 +26,24 @@ pub fn save_key(key: &[u8; 32], timeout_minutes: u64) -> Result<bool> {
 pub fn load_key() -> Result<Zeroizing<[u8; 32]>> {
     // Try keychain first; clear it and fall through on any error.
     if let Some(content) = crate::keychain::load() {
-        let result = parse_session(content.trim());
-        if result.is_err() {
-            crate::keychain::clear();
+        match parse_session(content.trim()) {
+            Ok((key, timeout_minutes)) => {
+                let _ = refresh_session(&key, timeout_minutes);
+                return Ok(key);
+            }
+            Err(_) => {
+                crate::keychain::clear();
+            }
         }
-        return result;
     }
 
     // Fall back to session file.
     let path = crate::config::session_path()?;
     let content = fs::read_to_string(&path)
         .map_err(|_| anyhow!("Not authenticated. Run 'stash auth login' first."))?;
-    parse_session(content.trim())
+    let (key, timeout_minutes) = parse_session(content.trim())?;
+    let _ = refresh_session(&key, timeout_minutes);
+    Ok(key)
 }
 
 pub fn clear_key() -> Result<()> {
@@ -49,6 +53,26 @@ pub fn clear_key() -> Result<()> {
         fs::remove_file(path)?;
     }
     Ok(())
+}
+
+fn refresh_session(key: &[u8; 32], timeout_minutes: u64) -> Result<()> {
+    if timeout_minutes == 0 {
+        return Ok(());
+    }
+    let expiry = now_secs() + timeout_minutes * 60;
+    let content = encode_session(expiry, timeout_minutes, key);
+    crate::keychain::save(&content);
+    let path = crate::config::session_path()?;
+    write_session_file(&path, content.as_bytes())
+}
+
+fn encode_session(expiry: u64, timeout_minutes: u64, key: &[u8; 32]) -> Zeroizing<String> {
+    Zeroizing::new(format!(
+        "{}\n{}\n{}",
+        expiry,
+        timeout_minutes,
+        B64.encode(key)
+    ))
 }
 
 // On Unix: delete any existing file then create with mode 0600 before writing,
@@ -83,10 +107,15 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
-fn parse_session(content: &str) -> Result<Zeroizing<[u8; 32]>> {
+fn parse_session(content: &str) -> Result<(Zeroizing<[u8; 32]>, u64)> {
     let corrupt = || anyhow!("Corrupt session file. Run 'stash auth login' again.");
     let mut lines = content.lines();
     let expiry: u64 = lines
+        .next()
+        .ok_or_else(corrupt)?
+        .parse()
+        .map_err(|_| corrupt())?;
+    let timeout_minutes: u64 = lines
         .next()
         .ok_or_else(corrupt)?
         .parse()
@@ -104,66 +133,74 @@ fn parse_session(content: &str) -> Result<Zeroizing<[u8; 32]>> {
     }
     let mut key = Zeroizing::new([0u8; 32]);
     key.copy_from_slice(&bytes);
-    Ok(key)
+    Ok((key, timeout_minutes))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn make_session(expiry_offset_secs: i64, key: &[u8; 32]) -> String {
+    fn make_session(expiry_offset_secs: i64, timeout_minutes: u64, key: &[u8; 32]) -> String {
         let expiry = (now_secs() as i64 + expiry_offset_secs) as u64;
-        format!("{}\n{}", expiry, B64.encode(key))
+        format!("{}\n{}\n{}", expiry, timeout_minutes, B64.encode(key))
     }
 
     #[test]
     fn valid_session_parsed() {
         let key = [0x42u8; 32];
-        let content = make_session(900, &key);
-        assert_eq!(*parse_session(&content).unwrap(), key);
+        let content = make_session(900, 15, &key);
+        assert_eq!(*parse_session(&content).unwrap().0, key);
     }
 
     #[test]
     fn expired_session_rejected() {
         let key = [0x42u8; 32];
-        let content = make_session(-1, &key);
+        let content = make_session(-1, 15, &key);
         let err = parse_session(&content).unwrap_err();
         assert!(err.to_string().contains("expired"));
     }
 
     #[test]
+    fn missing_timeout_line_rejected() {
+        let expiry = now_secs() + 900;
+        let key = [0x42u8; 32];
+        let content = format!("{}\n{}", expiry, B64.encode(key));
+        let err = parse_session(&content).unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("corrupt"));
+    }
+
+    #[test]
     fn missing_key_line_rejected() {
         let expiry = now_secs() + 900;
-        let err = parse_session(&expiry.to_string()).unwrap_err();
+        let err = parse_session(&format!("{}\n15", expiry)).unwrap_err();
         assert!(err.to_string().to_lowercase().contains("corrupt"));
     }
 
     #[test]
     fn bad_base64_rejected() {
         let expiry = now_secs() + 900;
-        let content = format!("{}\nnot!base64!!!", expiry);
+        let content = format!("{}\n15\nnot!base64!!!", expiry);
         assert!(parse_session(&content).is_err());
     }
 
     #[test]
     fn wrong_key_length_rejected() {
         let expiry = now_secs() + 900;
-        let content = format!("{}\n{}", expiry, B64.encode([0u8; 16]));
+        let content = format!("{}\n15\n{}", expiry, B64.encode([0u8; 16]));
         let err = parse_session(&content).unwrap_err();
         assert!(err.to_string().to_lowercase().contains("corrupt"));
     }
 
     #[test]
     fn non_numeric_expiry_rejected() {
-        let err = parse_session("not-a-number\nYWJj").unwrap_err();
+        let err = parse_session("not-a-number\n15\nYWJj").unwrap_err();
         assert!(err.to_string().to_lowercase().contains("corrupt"));
     }
 
     #[test]
     fn zero_timeout_stores_max_expiry_and_never_expires() {
-        // timeout_minutes=0 means no timeout: expiry is stored as u64::MAX
         let key = [0x11u8; 32];
-        let content = format!("{}\n{}", u64::MAX, B64.encode(key));
-        assert_eq!(*parse_session(&content).unwrap(), key);
+        let content = format!("{}\n0\n{}", u64::MAX, B64.encode(key));
+        assert_eq!(*parse_session(&content).unwrap().0, key);
     }
 }
