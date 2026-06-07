@@ -9,6 +9,8 @@ const PRIVATE_FLAGS: &[(&str, &str)] = &[
     ("chromium", "--incognito"),
     ("chromium-browser", "--incognito"),
     ("brave-browser", "--incognito"),
+    ("vivaldi", "--incognito"),
+    ("vivaldi-stable", "--incognito"),
 ];
 
 pub fn web(
@@ -65,7 +67,7 @@ fn open_private_with(browser: &str, url: &str) -> Result<()> {
             anyhow!(
                 "Unknown private-mode flag for '{}'. \
                  Known browsers: firefox (--private-window), \
-                 google-chrome / chromium / brave-browser (--incognito).",
+                 google-chrome / chromium / brave-browser / vivaldi (--incognito).",
                 browser
             )
         })?;
@@ -96,7 +98,7 @@ fn open_private_discover(url: &str) -> Result<()> {
     }
     Err(anyhow!(
         "No supported browser found for private mode. \
-         Tried: firefox, google-chrome, chromium, chromium-browser, brave-browser. \
+         Tried: firefox, google-chrome, chromium, chromium-browser, brave-browser, vivaldi. \
          Set `browser` in stash.toml or pass --browser."
     ))
 }

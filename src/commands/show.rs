@@ -50,6 +50,7 @@ fn copy_to_clipboard(text: &str) -> Result<()> {
         ("wl-copy", &[]),                        // Wayland
         ("xclip", &["-selection", "clipboard"]), // X11
         ("xsel", &["--clipboard", "--input"]),   // X11 alt
+        ("clip.exe", &[]),                       // Windows (also WSL)
     ];
 
     for (cmd, args) in candidates {
@@ -66,7 +67,8 @@ fn copy_to_clipboard(text: &str) -> Result<()> {
 
     Err(anyhow!(
         "No clipboard command found. \
-         Install pbcopy (macOS), wl-clipboard (Wayland), or xclip/xsel (X11)."
+         Install pbcopy (macOS), wl-clipboard (Wayland), xclip/xsel (X11), \
+         or use Windows where clip.exe is built in."
     ))
 }
 

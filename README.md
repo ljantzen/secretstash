@@ -3,13 +3,13 @@
 [![CI](https://github.com/ljantzen/stash/actions/workflows/ci.yml/badge.svg)](https://github.com/ljantzen/stash/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A command-line manager for notes, URLs, and secrets — stored in an encrypted local database.
+A command-line manager for notes and URLs — stored in an encrypted local database.
 
 Each item is identified by a short name and versioned: every edit is archived so you can review the full history at any time.
 
 ## Features
 
-- **Three item types** — `note`, `url`, `secret`
+- **Two item types** — `note`, `url`
 - **Encrypted at rest** — ChaCha20-Poly1305 field-level encryption; Argon2id key derivation
 - **Tags** — attach multiple encrypted tags to any item; filter and search by tag
 - **Version history** — every edit is archived; nothing is silently overwritten
@@ -52,7 +52,8 @@ file if it does not exist.
 ```toml
 # ~/.config/stash/stash.toml
 db = "/mnt/usb/stash.db"
-session_timeout_minutes = 60   # default: 15
+session_timeout_minutes = 60   # default: 15; set to 0 to disable timeout
+browser = "firefox"            # preferred browser for `stash web`
 ```
 
 ### Alternate database
@@ -82,9 +83,8 @@ On macOS the base directory is `~/Library/Application Support/stash/`.
 stash auth login
 
 # Add items
-stash add --type note   --shortname todo        "Buy milk"
-stash add --type url    --shortname gh          "https://github.com"
-stash add --type secret --shortname aws-key     "AKIA..."
+stash add --type note  --shortname todo  "Buy milk"
+stash add --type url   --shortname gh    "https://github.com"
 
 # Add items with tags
 stash add --type note --shortname todo --tag work --tag personal "Buy milk"
@@ -98,6 +98,7 @@ echo "some text" | stash add --type note --shortname pipe --stdin
 # Show an item
 stash show todo                 # content only (tags printed if present)
 stash show todo --verbose       # content + metadata (type, timestamps, tags)
+stash show todo --copy          # copy content to clipboard (no terminal output)
 
 # Edit an item (opens $EDITOR; old version is archived automatically)
 stash edit todo
@@ -108,6 +109,7 @@ stash history todo
 # Open a URL in the browser
 stash web gh
 stash web gh --private          # incognito / private mode
+stash web gh --browser firefox  # use a specific browser (overrides config)
 
 # List all items
 stash list
@@ -115,6 +117,9 @@ stash list
 # List items filtered by tag (OR logic — shows items with any matching tag)
 stash list --tag work
 stash list --tag work --tag personal
+
+# List items filtered by type
+stash list --type url
 
 # Manage tags on existing items
 stash tag todo urgent
@@ -129,8 +134,25 @@ stash find --tag work "meeting"
 # List all items with a given tag (no content search)
 stash find --tag work
 
+# Filter by type (combinable with --tag and query)
+stash find --type url
+stash find --type url "github"
+
 # Delete an item and all its history
 stash purge todo
+stash purge todo --force        # skip confirmation (useful in scripts)
+
+# Rename an item
+stash rename todo todo-done
+
+# Copy an item to a new shortname
+stash copy aws-key aws-key-backup
+
+# Restore an item to its previous version (undo last edit)
+stash restore todo
+
+# Restore to a specific version
+stash restore todo --version 2
 
 # End the session
 stash auth logout
@@ -141,8 +163,15 @@ stash auth logout
 ### `stash auth login`
 
 Authenticates against the vault. On first run, creates a new vault and prompts
-you to set a master password. On subsequent runs, prompts for the existing password.
-The derived key is cached in `.session` (permissions 0600) until you log out.
+you to set a master password (minimum 12 characters). On subsequent runs, prompts
+for the existing password.
+
+The derived key is cached for up to `session_timeout_minutes` minutes (default
+15; 0 = no timeout). On macOS the key is stored in **Keychain**; on Linux it is
+stored in the **Secret Service** (GNOME Keyring / KWallet) if `secret-tool` is
+available. In both cases the session file (`~/.local/share/stash/.session`,
+mode 0600) is kept as a fallback. The login message notes `(keychain)` when the
+system keychain was used.
 
 ### `stash auth logout`
 
@@ -151,12 +180,12 @@ Removes the cached session key. The vault database is not affected.
 ### `stash add`
 
 ```
-stash add -t/--type <url|note|secret> -s/--shortname <name> [options] [TEXT]
+stash add -t/--type <url|note> -s/--shortname <name> [options] [TEXT]
 ```
 
 | Option | Description |
 |--------|-------------|
-| `-t`, `--type` | Item type: `url`, `note`, or `secret` (required) |
+| `-t`, `--type` | Item type: `url` or `note` (required) |
 | `-s`, `--shortname` | Identifier used in all other commands (required) |
 | `-e`, `--edit` | Open `$EDITOR` to compose content |
 | `--stdin` | Read content from standard input |
@@ -169,7 +198,9 @@ Exactly one of `--edit`, `--stdin`, or positional `TEXT` must be supplied.
 
 Prints the item's content. If the item has tags they are shown on a `tags:` line
 after the content. Add `--verbose` / `-v` to also show the type, timestamps, and
-tags in a metadata header.
+tags in a metadata header. Add `--copy` / `-c` to copy the content to the
+clipboard instead of printing it (requires `pbcopy`, `wl-copy`, `xclip`, or
+`xsel`).
 
 ### `stash edit <shortname>`
 
@@ -181,20 +212,27 @@ automatically saved to history before the update is written.
 Shows all archived versions followed by the current content, each labelled with
 its version number and timestamp.
 
-### `stash web [-p] <shortname>`
+### `stash web [-p] [-b <browser>] <shortname>`
 
-Opens a `url`-type item in the default browser. Pass `-p` / `--private` to open
-in private/incognito mode (tries Firefox, Chrome, Chromium, and Brave in order).
+Opens a `url`-type item in the browser. Pass `-p` / `--private` to open in
+private/incognito mode. Pass `-b` / `--browser` to specify a browser binary
+(e.g., `firefox`, `google-chrome`); this overrides the `browser` field in
+`stash.toml`. Without a specified browser, the system default is used (or, for
+`--private`, tries Firefox, Chrome, Chromium, Brave, and Vivaldi in order).
+
+Private-mode flags are known for: `firefox` (`--private-window`),
+`google-chrome`, `chromium`, `chromium-browser`, `brave-browser`, `vivaldi`, `vivaldi-stable` (`--incognito`).
 
 ### `stash list`
 
 ```
-stash list [-g/--tag <TAG>]...
+stash list [-g/--tag <TAG>]... [-t/--type <TYPE>]
 ```
 
 Lists all items in a table showing name, type, and tags. Pass one or more
 `-g`/`--tag` options to show only items that have **any** of the specified tags
-(OR logic).
+(OR logic). Pass `-t`/`--type` to restrict to a single type (`url` or `note`). Both
+filters can be combined.
 
 ### `stash tag <shortname> <TAG>...`
 
@@ -208,22 +246,43 @@ silently ignored.
 ### `stash find`
 
 ```
-stash find [--tag <TAG>] [QUERY]
+stash find [--tag <TAG>] [--type <TYPE>] [QUERY]
 ```
 
-Searches items by content and/or tag (case-insensitive). At least one of `QUERY`
-or `--tag` is required.
+Searches items by content, tag, and/or type (case-insensitive). At least one of
+`QUERY`, `--tag`, or `--type` is required.
 
 | Option | Description |
 |--------|-------------|
 | `QUERY` | Text to search for in item content |
 | `-g`, `--tag <TAG>` | Restrict results to items that have this tag |
+| `-t`, `--type <TYPE>` | Restrict results to `url` or `note` |
 
 Results show the item name, type, and a snippet of matching content.
 
 ### `stash purge <shortname>`
 
-Deletes an item and its entire history after a confirmation prompt.
+Deletes an item and its entire history after a confirmation prompt. Pass
+`--force` / `-f` to skip the prompt (useful in scripts).
+
+### `stash rename <shortname> <new-name>`
+
+Renames an item. Fails if `<new-name>` is already in use.
+
+### `stash copy <shortname> <dest>`
+
+Copies an item (content, type, and tags) to a new shortname. History is not
+copied. Each field is re-encrypted with a fresh nonce.
+
+### `stash restore <shortname>`
+
+```
+stash restore <shortname> [--version <N>]
+```
+
+Restores an item to a previous version. Without `--version`, restores to the
+most recently archived version (undo last edit). The current content is
+archived before the restore, so the full history is preserved.
 
 ## Security notes
 
@@ -234,7 +293,7 @@ Deletes an item and its entire history after a confirmation prompt.
 - The session file stores the raw 32-byte key in base64. It is written with
   mode 0600 and lives only as long as you stay logged in.
 - `$EDITOR` opens items in a temporary file. Some editors create swap or backup
-  files in the same directory; be aware of this when editing secrets.
+  files in the same directory.
 
 ## License
 

@@ -49,6 +49,9 @@ pub enum Commands {
         /// Show metadata (type, timestamps) in addition to content
         #[arg(short = 'v', long)]
         verbose: bool,
+        /// Copy content to clipboard instead of printing
+        #[arg(short = 'c', long)]
+        copy: bool,
         shortname: String,
     },
     /// Show version history of an item
@@ -60,15 +63,26 @@ pub enum Commands {
         /// Open in private/incognito mode
         #[arg(short = 'p', long)]
         private: bool,
+        /// Browser binary to use (overrides config `browser`)
+        #[arg(short = 'b', long)]
+        browser: Option<String>,
         shortname: String,
     },
     /// Delete an item and its entire history
-    Purge { shortname: String },
-    /// List all items, optionally filtered by tag(s)
+    Purge {
+        /// Skip confirmation prompt
+        #[arg(short = 'f', long)]
+        force: bool,
+        shortname: String,
+    },
+    /// List all items, optionally filtered by tag(s) and/or type
     List {
         /// Show items that have ANY of the specified tags (repeatable)
         #[arg(short = 'g', long = "tag", value_name = "TAG")]
         tags: Vec<String>,
+        /// Filter by item type
+        #[arg(short = 't', long = "type", value_name = "TYPE")]
+        item_type: Option<ItemType>,
     },
     /// Add tags to an existing item
     Tag {
@@ -89,9 +103,23 @@ pub enum Commands {
         /// Filter by tag
         #[arg(short = 'g', long = "tag", value_name = "TAG")]
         tag: Option<String>,
-        /// Search term (required unless --tag is used)
+        /// Filter by item type
+        #[arg(short = 't', long = "type", value_name = "TYPE")]
+        item_type: Option<ItemType>,
+        /// Search term (required unless --tag or --type is used)
         query: Option<String>,
     },
+    /// Rename an item
+    Rename { shortname: String, new_name: String },
+    /// Restore an item to a previous version
+    Restore {
+        shortname: String,
+        /// Version number to restore (default: most recent archived version)
+        #[arg(long, value_name = "N")]
+        version: Option<i64>,
+    },
+    /// Copy an item to a new shortname
+    Copy { shortname: String, dest: String },
 }
 
 #[derive(Subcommand)]
@@ -106,7 +134,6 @@ pub enum AuthAction {
 pub enum ItemType {
     Url,
     Note,
-    Secret,
 }
 
 impl std::fmt::Display for ItemType {
@@ -114,7 +141,6 @@ impl std::fmt::Display for ItemType {
         match self {
             ItemType::Url => write!(f, "url"),
             ItemType::Note => write!(f, "note"),
-            ItemType::Secret => write!(f, "secret"),
         }
     }
 }
@@ -201,15 +227,8 @@ mod tests {
     }
 
     #[test]
-    fn add_secret_type() {
-        let cli = parse(&["stash", "add", "-t", "secret", "-s", "k", "v"]).unwrap();
-        assert!(matches!(
-            cli.command,
-            Commands::Add {
-                item_type: ItemType::Secret,
-                ..
-            }
-        ));
+    fn add_rejects_secret_type() {
+        assert!(parse(&["stash", "add", "-t", "secret", "-s", "k", "v"]).is_err());
     }
 
     #[test]
@@ -465,6 +484,5 @@ mod tests {
     fn item_type_display() {
         assert_eq!(ItemType::Url.to_string(), "url");
         assert_eq!(ItemType::Note.to_string(), "note");
-        assert_eq!(ItemType::Secret.to_string(), "secret");
     }
 }
