@@ -242,6 +242,57 @@ impl Db {
         Ok(items)
     }
 
+    pub fn rename_item(&self, old: &str, new: &str) -> Result<()> {
+        let n = self.conn.execute(
+            "UPDATE items SET shortname=?1 WHERE shortname=?2",
+            params![new, old],
+        )?;
+        if n == 0 {
+            return Err(anyhow!("Item '{}' not found", old));
+        }
+        Ok(())
+    }
+
+    pub fn get_history_version(&self, item_id: i64, version: i64) -> Result<Option<HistoryEntry>> {
+        match self.conn.query_row(
+            "SELECT content_enc, nonce, version, created_at
+             FROM history WHERE item_id=?1 AND version=?2",
+            params![item_id, version],
+            |row| {
+                Ok(HistoryEntry {
+                    content_enc: row.get(0)?,
+                    nonce: row.get(1)?,
+                    version: row.get(2)?,
+                    created_at: row.get(3)?,
+                })
+            },
+        ) {
+            Ok(e) => Ok(Some(e)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub fn get_latest_history(&self, item_id: i64) -> Result<Option<HistoryEntry>> {
+        match self.conn.query_row(
+            "SELECT content_enc, nonce, version, created_at
+             FROM history WHERE item_id=?1 ORDER BY version DESC LIMIT 1",
+            params![item_id],
+            |row| {
+                Ok(HistoryEntry {
+                    content_enc: row.get(0)?,
+                    nonce: row.get(1)?,
+                    version: row.get(2)?,
+                    created_at: row.get(3)?,
+                })
+            },
+        ) {
+            Ok(e) => Ok(Some(e)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     pub fn item_exists(&self, shortname: &str) -> Result<bool> {
         let count: i64 = self.conn.query_row(
             "SELECT COUNT(*) FROM items WHERE shortname=?1",
@@ -530,6 +581,69 @@ mod tests {
         db.add_history(id, b"v2", b"n2").unwrap();
         db.delete_item("k").unwrap();
         assert!(db.get_history(id).unwrap().is_empty());
+    }
+
+    // ── rename_item ───────────────────────────────────────────────────────
+
+    #[test]
+    fn rename_item() {
+        let db = mem_db();
+        db.insert_item("old", "note", b"e", b"n").unwrap();
+        db.rename_item("old", "new").unwrap();
+        assert!(db.get_item("old").unwrap().is_none());
+        assert_eq!(db.get_item("new").unwrap().unwrap().shortname, "new");
+    }
+
+    #[test]
+    fn rename_nonexistent_fails() {
+        assert!(mem_db().rename_item("ghost", "other").is_err());
+    }
+
+    #[test]
+    fn rename_to_existing_name_fails() {
+        let db = mem_db();
+        db.insert_item("a", "note", b"e", b"n").unwrap();
+        db.insert_item("b", "note", b"e", b"n").unwrap();
+        assert!(db.rename_item("a", "b").is_err());
+    }
+
+    // ── get_history_version / get_latest_history ──────────────────────────
+
+    #[test]
+    fn get_history_version_found() {
+        let db = mem_db();
+        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        db.add_history(id, b"v1", b"n1").unwrap();
+        db.add_history(id, b"v2", b"n2").unwrap();
+        let e = db.get_history_version(id, 1).unwrap().unwrap();
+        assert_eq!(e.content_enc, b"v1");
+        assert_eq!(e.version, 1);
+    }
+
+    #[test]
+    fn get_history_version_not_found() {
+        let db = mem_db();
+        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        assert!(db.get_history_version(id, 99).unwrap().is_none());
+    }
+
+    #[test]
+    fn get_latest_history_returns_max_version() {
+        let db = mem_db();
+        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        db.add_history(id, b"v1", b"n1").unwrap();
+        db.add_history(id, b"v2", b"n2").unwrap();
+        db.add_history(id, b"v3", b"n3").unwrap();
+        let e = db.get_latest_history(id).unwrap().unwrap();
+        assert_eq!(e.version, 3);
+        assert_eq!(e.content_enc, b"v3");
+    }
+
+    #[test]
+    fn get_latest_history_empty() {
+        let db = mem_db();
+        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        assert!(db.get_latest_history(id).unwrap().is_none());
     }
 
     // ── replace_content ───────────────────────────────────────────────────

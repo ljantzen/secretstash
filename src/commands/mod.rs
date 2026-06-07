@@ -1,10 +1,13 @@
 pub mod add;
 pub mod auth;
+pub mod copy;
 pub mod edit;
 pub mod find;
 pub mod history;
 pub mod list;
 pub mod purge;
+pub mod rename;
+pub mod restore;
 pub mod show;
 pub mod tag;
 pub mod web;
