@@ -34,6 +34,7 @@ fn main() -> Result<()> {
                 commands::auth::login(&db_path, timeout)
             }
             AuthAction::Logout => commands::auth::logout(),
+            AuthAction::Reset => commands::auth::reset(&db_path),
         },
         Commands::Add {
             item_type,

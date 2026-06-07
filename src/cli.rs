@@ -140,6 +140,8 @@ pub enum AuthAction {
     Login,
     /// Clear the current session
     Logout,
+    /// Change the master password and re-encrypt the vault
+    Reset,
 }
 
 #[derive(ValueEnum, Clone, Debug)]

@@ -321,6 +321,57 @@ impl Db {
         Ok(())
     }
 
+    /// Re-encrypt the entire vault in one atomic transaction.
+    /// `items`: (item_id, new_content_enc, new_nonce)
+    /// `history`: (item_id, version, new_content_enc, new_nonce)
+    /// `tags`: (tag_id, new_tag_enc, new_nonce)
+    pub fn reencrypt_all(
+        &self,
+        new_salt: &str,
+        new_canary_enc: &str,
+        new_canary_nonce: &str,
+        items: &[(i64, Vec<u8>, Vec<u8>)],
+        history: &[(i64, i64, Vec<u8>, Vec<u8>)],
+        tags: &[(i64, Vec<u8>, Vec<u8>)],
+    ) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+
+        for (id, enc, nonce) in items {
+            tx.execute(
+                "UPDATE items SET content_enc=?1, nonce=?2 WHERE id=?3",
+                params![enc, nonce, id],
+            )?;
+        }
+        for (item_id, version, enc, nonce) in history {
+            tx.execute(
+                "UPDATE history SET content_enc=?1, nonce=?2 WHERE item_id=?3 AND version=?4",
+                params![enc, nonce, item_id, version],
+            )?;
+        }
+        for (tag_id, enc, nonce) in tags {
+            tx.execute(
+                "UPDATE item_tags SET tag_enc=?1, nonce=?2 WHERE id=?3",
+                params![enc, nonce, tag_id],
+            )?;
+        }
+
+        tx.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES ('salt', ?1)",
+            params![new_salt],
+        )?;
+        tx.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES ('canary_enc', ?1)",
+            params![new_canary_enc],
+        )?;
+        tx.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES ('canary_nonce', ?1)",
+            params![new_canary_nonce],
+        )?;
+
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn item_exists(&self, shortname: &str) -> Result<bool> {
         let count: i64 = self.conn.query_row(
             "SELECT COUNT(*) FROM items WHERE shortname=?1",

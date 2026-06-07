@@ -161,6 +161,9 @@ stash restore todo --version 2
 
 # End the session
 stash auth logout
+
+# Change the master password (re-encrypts the entire vault)
+stash auth reset
 ```
 
 ## Command reference
@@ -183,6 +186,14 @@ system keychain was used.
 ### `stash auth logout`
 
 Removes the cached session key. The vault database is not affected.
+
+### `stash auth reset`
+
+Changes the master password. Prompts for the current password (to verify it),
+then prompts for the new password (minimum 12 characters, with confirmation).
+All item content, version history, and tags are re-encrypted under the new key
+in a single atomic transaction — the vault is never left in a partial state.
+The current session is cleared on success; run `stash auth login` afterward.
 
 ### `stash add`
 
