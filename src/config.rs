@@ -6,6 +6,7 @@ use std::path::PathBuf;
 pub struct Config {
     pub db: Option<PathBuf>,
     pub session_timeout_minutes: Option<u64>,
+    pub browser: Option<String>,
 }
 
 pub fn data_dir() -> Result<PathBuf> {

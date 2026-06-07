@@ -2,7 +2,21 @@ use anyhow::{Result, anyhow};
 
 use crate::{crypto, db::Db, session};
 
-pub fn web(shortname: &str, private: bool, db_path: &std::path::Path) -> Result<()> {
+// Known private-mode flags; also used to validate browser names for --private.
+const PRIVATE_FLAGS: &[(&str, &str)] = &[
+    ("firefox", "--private-window"),
+    ("google-chrome", "--incognito"),
+    ("chromium", "--incognito"),
+    ("chromium-browser", "--incognito"),
+    ("brave-browser", "--incognito"),
+];
+
+pub fn web(
+    shortname: &str,
+    private: bool,
+    browser: Option<&str>,
+    db_path: &std::path::Path,
+) -> Result<()> {
     let key = session::load_key()?;
     let db = Db::open(db_path)?;
 
@@ -21,27 +35,54 @@ pub fn web(shortname: &str, private: bool, db_path: &std::path::Path) -> Result<
     let content = crypto::decrypt(&key, &item.content_enc, &item.nonce)?;
     let url = String::from_utf8(content.to_vec())?.trim().to_string();
 
-    if private {
-        open_private(&url)
-    } else {
-        open::that(&url)?;
-        println!("Opened '{}' in browser.", shortname);
-        Ok(())
+    match (browser, private) {
+        (Some(b), false) => open_with(b, &url),
+        (Some(b), true) => open_private_with(b, &url),
+        (None, false) => {
+            open::that(&url)?;
+            println!("Opened '{}' in browser.", shortname);
+            Ok(())
+        }
+        (None, true) => open_private_discover(&url),
     }
 }
 
-fn open_private(url: &str) -> Result<()> {
-    let candidates: &[(&str, &[&str])] = &[
-        ("firefox", &["--private-window"]),
-        ("google-chrome", &["--incognito"]),
-        ("chromium", &["--incognito"]),
-        ("chromium-browser", &["--incognito"]),
-        ("brave-browser", &["--incognito"]),
-    ];
+fn open_with(browser: &str, url: &str) -> Result<()> {
+    std::process::Command::new(browser)
+        .arg(url)
+        .spawn()
+        .map_err(|e| browser_err(browser, e))?;
+    println!("Opened in {}.", browser);
+    Ok(())
+}
 
-    for (browser, flags) in candidates {
+fn open_private_with(browser: &str, url: &str) -> Result<()> {
+    let flag = PRIVATE_FLAGS
+        .iter()
+        .find(|(name, _)| *name == browser)
+        .map(|(_, flag)| *flag)
+        .ok_or_else(|| {
+            anyhow!(
+                "Unknown private-mode flag for '{}'. \
+                 Known browsers: firefox (--private-window), \
+                 google-chrome / chromium / brave-browser (--incognito).",
+                browser
+            )
+        })?;
+
+    std::process::Command::new(browser)
+        .arg(flag)
+        .arg(url)
+        .spawn()
+        .map_err(|e| browser_err(browser, e))?;
+    println!("Opened in {} (private mode).", browser);
+    Ok(())
+}
+
+fn open_private_discover(url: &str) -> Result<()> {
+    for (browser, flag) in PRIVATE_FLAGS {
         match std::process::Command::new(browser)
-            .args(*flags)
+            .arg(flag)
             .arg(url)
             .spawn()
         {
@@ -53,9 +94,17 @@ fn open_private(url: &str) -> Result<()> {
             Err(e) => return Err(e.into()),
         }
     }
-
     Err(anyhow!(
         "No supported browser found for private mode. \
-         Tried: firefox, google-chrome, chromium, chromium-browser, brave-browser"
+         Tried: firefox, google-chrome, chromium, chromium-browser, brave-browser. \
+         Set `browser` in stash.toml or pass --browser."
     ))
+}
+
+fn browser_err(browser: &str, e: std::io::Error) -> anyhow::Error {
+    if e.kind() == std::io::ErrorKind::NotFound {
+        anyhow!("Browser '{}' not found", browser)
+    } else {
+        e.into()
+    }
 }
