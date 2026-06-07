@@ -26,6 +26,9 @@ pub fn show(shortname: &str, verbose: bool, copy: bool, db_path: &std::path::Pat
     if verbose {
         println!("shortname : {}", item.shortname);
         println!("type      : {}", item.item_type);
+        if let Some(b) = &item.browser {
+            println!("browser   : {}", b);
+        }
         if !tags.is_empty() {
             println!("tags      : {}", tags.join(", "));
         }

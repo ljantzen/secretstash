@@ -3,6 +3,7 @@ use std::io::{self, Read, Write};
 
 use crate::{cli::ItemType, crypto, db::Db, session};
 
+#[allow(clippy::too_many_arguments)]
 pub fn add(
     item_type: ItemType,
     shortname: &str,
@@ -10,10 +11,14 @@ pub fn add(
     from_stdin: bool,
     tags: &[String],
     text: Option<&str>,
+    browser: Option<&str>,
     db_path: &std::path::Path,
 ) -> Result<()> {
     if edit && from_stdin {
         return Err(anyhow!("Cannot use --edit and --stdin together"));
+    }
+    if browser.is_some() && !matches!(item_type, ItemType::Url) {
+        return Err(anyhow!("--browser is only valid for URL items"));
     }
 
     let key = session::load_key()?;
@@ -47,7 +52,7 @@ pub fn add(
 
     let type_str = item_type.to_string();
     let (enc, nonce) = crypto::encrypt(&key, content.as_bytes())?;
-    let item_id = db.insert_item(shortname, &type_str, &enc, &nonce)?;
+    let item_id = db.insert_item(shortname, &type_str, &enc, &nonce, browser)?;
 
     let mut seen = std::collections::HashSet::new();
     for tag in tags {

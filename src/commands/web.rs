@@ -16,7 +16,8 @@ const PRIVATE_FLAGS: &[(&str, &str)] = &[
 pub fn web(
     shortname: &str,
     private: bool,
-    browser: Option<&str>,
+    cli_browser: Option<&str>,
+    cfg_browser: Option<&str>,
     db_path: &std::path::Path,
 ) -> Result<()> {
     let key = session::load_key()?;
@@ -36,6 +37,9 @@ pub fn web(
 
     let content = crypto::decrypt(&key, &item.content_enc, &item.nonce)?;
     let url = String::from_utf8(content.to_vec())?.trim().to_string();
+
+    // Priority: --browser flag > per-item stored browser > config browser > system default
+    let browser = cli_browser.or(item.browser.as_deref()).or(cfg_browser);
 
     match (browser, private) {
         (Some(b), false) => open_with(b, &url),

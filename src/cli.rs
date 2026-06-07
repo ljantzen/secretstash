@@ -41,6 +41,9 @@ pub enum Commands {
         /// Tag(s) to attach (repeatable: --tag work --tag personal)
         #[arg(short = 'g', long = "tag", value_name = "TAG")]
         tags: Vec<String>,
+        /// Preferred browser for opening this URL (url items only)
+        #[arg(short = 'b', long)]
+        browser: Option<String>,
         /// Content text
         text: Option<String>,
     },

@@ -41,6 +41,7 @@ fn main() -> Result<()> {
             edit,
             stdin,
             tags,
+            browser,
             text,
         } => commands::add::add(
             item_type,
@@ -49,6 +50,7 @@ fn main() -> Result<()> {
             stdin,
             &tags,
             text.as_deref(),
+            browser.as_deref(),
             &db_path,
         ),
         Commands::Show {
@@ -62,10 +64,13 @@ fn main() -> Result<()> {
             private,
             browser,
             shortname,
-        } => {
-            let effective_browser = browser.or(cfg.browser);
-            commands::web::web(&shortname, private, effective_browser.as_deref(), &db_path)
-        }
+        } => commands::web::web(
+            &shortname,
+            private,
+            browser.as_deref(),
+            cfg.browser.as_deref(),
+            &db_path,
+        ),
         Commands::Purge { force, shortname } => commands::purge::purge(&shortname, force, &db_path),
         Commands::List { tags, item_type } => commands::list::list(
             &tags,

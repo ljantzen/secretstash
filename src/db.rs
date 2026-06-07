@@ -14,6 +14,7 @@ pub struct Item {
     pub nonce: Vec<u8>,
     pub created_at: String,
     pub updated_at: String,
+    pub browser: Option<String>,
 }
 
 pub struct HistoryEntry {
@@ -72,6 +73,19 @@ impl Db {
                 nonce   BLOB NOT NULL
             );",
         )?;
+
+        // Add browser column to existing databases that predate this field.
+        let has_browser = self
+            .conn
+            .prepare("PRAGMA table_info(items)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .any(|name| name == "browser");
+        if !has_browser {
+            self.conn
+                .execute_batch("ALTER TABLE items ADD COLUMN browser TEXT")?;
+        }
+
         Ok(())
     }
 
@@ -101,12 +115,13 @@ impl Db {
         item_type: &str,
         content_enc: &[u8],
         nonce: &[u8],
+        browser: Option<&str>,
     ) -> Result<i64> {
         let now = chrono::Utc::now().to_rfc3339();
         self.conn.execute(
-            "INSERT INTO items (shortname, item_type, content_enc, nonce, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
-            params![shortname, item_type, content_enc, nonce, now],
+            "INSERT INTO items (shortname, item_type, content_enc, nonce, browser, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+            params![shortname, item_type, content_enc, nonce, browser, now],
         )?;
         Ok(self.conn.last_insert_rowid())
     }
@@ -126,7 +141,7 @@ impl Db {
 
     pub fn get_item(&self, shortname: &str) -> Result<Option<Item>> {
         match self.conn.query_row(
-            "SELECT id, shortname, item_type, content_enc, nonce, created_at, updated_at
+            "SELECT id, shortname, item_type, content_enc, nonce, created_at, updated_at, browser
              FROM items WHERE shortname=?1",
             params![shortname],
             |row| {
@@ -138,6 +153,7 @@ impl Db {
                     nonce: row.get(4)?,
                     created_at: row.get(5)?,
                     updated_at: row.get(6)?,
+                    browser: row.get(7)?,
                 })
             },
         ) {
@@ -223,7 +239,7 @@ impl Db {
 
     pub fn list_items(&self) -> Result<Vec<Item>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, shortname, item_type, content_enc, nonce, created_at, updated_at
+            "SELECT id, shortname, item_type, content_enc, nonce, created_at, updated_at, browser
              FROM items ORDER BY shortname ASC",
         )?;
         let items = stmt
@@ -236,6 +252,7 @@ impl Db {
                     nonce: row.get(4)?,
                     created_at: row.get(5)?,
                     updated_at: row.get(6)?,
+                    browser: row.get(7)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -380,7 +397,7 @@ mod tests {
     #[test]
     fn insert_and_get() {
         let db = mem_db();
-        let id = db.insert_item("k", "note", b"enc", b"nonce").unwrap();
+        let id = db.insert_item("k", "note", b"enc", b"nonce", None).unwrap();
         assert!(id > 0);
         let item = db.get_item("k").unwrap().unwrap();
         assert_eq!(item.shortname, "k");
@@ -397,7 +414,7 @@ mod tests {
     #[test]
     fn item_exists_true_after_insert() {
         let db = mem_db();
-        db.insert_item("k", "url", b"e", b"n").unwrap();
+        db.insert_item("k", "url", b"e", b"n", None).unwrap();
         assert!(db.item_exists("k").unwrap());
     }
 
@@ -409,19 +426,23 @@ mod tests {
     #[test]
     fn duplicate_shortname_fails() {
         let db = mem_db();
-        db.insert_item("k", "note", b"e", b"n").unwrap();
-        assert!(db.insert_item("k", "note", b"e2", b"n2").is_err());
+        db.insert_item("k", "note", b"e", b"n", None).unwrap();
+        assert!(db.insert_item("k", "note", b"e2", b"n2", None).is_err());
     }
 
     #[test]
     fn invalid_item_type_fails() {
-        assert!(mem_db().insert_item("k", "bogus", b"e", b"n").is_err());
+        assert!(
+            mem_db()
+                .insert_item("k", "bogus", b"e", b"n", None)
+                .is_err()
+        );
     }
 
     #[test]
     fn update_item() {
         let db = mem_db();
-        db.insert_item("k", "note", b"old", b"n1").unwrap();
+        db.insert_item("k", "note", b"old", b"n1", None).unwrap();
         db.update_item("k", b"new", b"n2").unwrap();
         let item = db.get_item("k").unwrap().unwrap();
         assert_eq!(item.content_enc, b"new");
@@ -436,7 +457,7 @@ mod tests {
     #[test]
     fn delete_item() {
         let db = mem_db();
-        db.insert_item("k", "note", b"e", b"n").unwrap();
+        db.insert_item("k", "note", b"e", b"n", None).unwrap();
         db.delete_item("k").unwrap();
         assert!(!db.item_exists("k").unwrap());
     }
@@ -451,14 +472,14 @@ mod tests {
     #[test]
     fn history_empty_for_new_item() {
         let db = mem_db();
-        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
         assert!(db.get_history(id).unwrap().is_empty());
     }
 
     #[test]
     fn history_versions_increment() {
         let db = mem_db();
-        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
         db.add_history(id, b"v1", b"n1").unwrap();
         db.add_history(id, b"v2", b"n2").unwrap();
         db.add_history(id, b"v3", b"n3").unwrap();
@@ -472,7 +493,9 @@ mod tests {
     #[test]
     fn history_preserves_content() {
         let db = mem_db();
-        let id = db.insert_item("k", "note", b"current", b"cn").unwrap();
+        let id = db
+            .insert_item("k", "note", b"current", b"cn", None)
+            .unwrap();
         db.add_history(id, b"old content", b"old nonce").unwrap();
         let h = db.get_history(id).unwrap();
         assert_eq!(h[0].content_enc, b"old content");
@@ -482,7 +505,7 @@ mod tests {
     #[test]
     fn history_ordered_ascending() {
         let db = mem_db();
-        let id = db.insert_item("k", "url", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "url", b"e", b"n", None).unwrap();
         db.add_history(id, b"a", b"na").unwrap();
         db.add_history(id, b"b", b"nb").unwrap();
         let h = db.get_history(id).unwrap();
@@ -494,7 +517,7 @@ mod tests {
     #[test]
     fn add_and_get_tags() {
         let db = mem_db();
-        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
         db.add_tag(id, b"tag1_enc", b"n1").unwrap();
         db.add_tag(id, b"tag2_enc", b"n2").unwrap();
         let tags = db.get_tags(id).unwrap();
@@ -506,14 +529,14 @@ mod tests {
     #[test]
     fn get_tags_empty() {
         let db = mem_db();
-        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
         assert!(db.get_tags(id).unwrap().is_empty());
     }
 
     #[test]
     fn delete_tag() {
         let db = mem_db();
-        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
         db.add_tag(id, b"enc", b"nonce").unwrap();
         let tags = db.get_tags(id).unwrap();
         db.delete_tag(tags[0].id).unwrap();
@@ -523,7 +546,7 @@ mod tests {
     #[test]
     fn tags_cascade_on_item_delete() {
         let db = mem_db();
-        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
         db.add_tag(id, b"enc1", b"n1").unwrap();
         db.add_tag(id, b"enc2", b"n2").unwrap();
         db.delete_item("k").unwrap();
@@ -533,8 +556,8 @@ mod tests {
     #[test]
     fn tags_are_per_item() {
         let db = mem_db();
-        let id1 = db.insert_item("a", "note", b"e", b"n").unwrap();
-        let id2 = db.insert_item("b", "note", b"e", b"n").unwrap();
+        let id1 = db.insert_item("a", "note", b"e", b"n", None).unwrap();
+        let id2 = db.insert_item("b", "note", b"e", b"n", None).unwrap();
         db.add_tag(id1, b"tag_a", b"na").unwrap();
         db.add_tag(id2, b"tag_b", b"nb").unwrap();
         assert_eq!(db.get_tags(id1).unwrap().len(), 1);
@@ -552,18 +575,18 @@ mod tests {
     #[test]
     fn list_items_returns_all() {
         let db = mem_db();
-        db.insert_item("a", "note", b"e1", b"n1").unwrap();
-        db.insert_item("b", "url", b"e2", b"n2").unwrap();
-        db.insert_item("c", "note", b"e3", b"n3").unwrap();
+        db.insert_item("a", "note", b"e1", b"n1", None).unwrap();
+        db.insert_item("b", "url", b"e2", b"n2", None).unwrap();
+        db.insert_item("c", "note", b"e3", b"n3", None).unwrap();
         assert_eq!(db.list_items().unwrap().len(), 3);
     }
 
     #[test]
     fn list_items_ordered_by_shortname() {
         let db = mem_db();
-        db.insert_item("charlie", "note", b"e", b"n").unwrap();
-        db.insert_item("alpha", "note", b"e", b"n").unwrap();
-        db.insert_item("bravo", "note", b"e", b"n").unwrap();
+        db.insert_item("charlie", "note", b"e", b"n", None).unwrap();
+        db.insert_item("alpha", "note", b"e", b"n", None).unwrap();
+        db.insert_item("bravo", "note", b"e", b"n", None).unwrap();
         let names: Vec<_> = db
             .list_items()
             .unwrap()
@@ -576,7 +599,7 @@ mod tests {
     #[test]
     fn delete_cascades_to_history() {
         let db = mem_db();
-        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
         db.add_history(id, b"v1", b"n1").unwrap();
         db.add_history(id, b"v2", b"n2").unwrap();
         db.delete_item("k").unwrap();
@@ -588,7 +611,7 @@ mod tests {
     #[test]
     fn rename_item() {
         let db = mem_db();
-        db.insert_item("old", "note", b"e", b"n").unwrap();
+        db.insert_item("old", "note", b"e", b"n", None).unwrap();
         db.rename_item("old", "new").unwrap();
         assert!(db.get_item("old").unwrap().is_none());
         assert_eq!(db.get_item("new").unwrap().unwrap().shortname, "new");
@@ -602,8 +625,8 @@ mod tests {
     #[test]
     fn rename_to_existing_name_fails() {
         let db = mem_db();
-        db.insert_item("a", "note", b"e", b"n").unwrap();
-        db.insert_item("b", "note", b"e", b"n").unwrap();
+        db.insert_item("a", "note", b"e", b"n", None).unwrap();
+        db.insert_item("b", "note", b"e", b"n", None).unwrap();
         assert!(db.rename_item("a", "b").is_err());
     }
 
@@ -612,7 +635,7 @@ mod tests {
     #[test]
     fn get_history_version_found() {
         let db = mem_db();
-        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
         db.add_history(id, b"v1", b"n1").unwrap();
         db.add_history(id, b"v2", b"n2").unwrap();
         let e = db.get_history_version(id, 1).unwrap().unwrap();
@@ -623,14 +646,14 @@ mod tests {
     #[test]
     fn get_history_version_not_found() {
         let db = mem_db();
-        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
         assert!(db.get_history_version(id, 99).unwrap().is_none());
     }
 
     #[test]
     fn get_latest_history_returns_max_version() {
         let db = mem_db();
-        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
         db.add_history(id, b"v1", b"n1").unwrap();
         db.add_history(id, b"v2", b"n2").unwrap();
         db.add_history(id, b"v3", b"n3").unwrap();
@@ -642,7 +665,7 @@ mod tests {
     #[test]
     fn get_latest_history_empty() {
         let db = mem_db();
-        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
         assert!(db.get_latest_history(id).unwrap().is_none());
     }
 
@@ -652,7 +675,7 @@ mod tests {
     fn replace_content_archives_old_and_writes_new() {
         let db = mem_db();
         let id = db
-            .insert_item("k", "note", b"old_enc", b"old_nonce")
+            .insert_item("k", "note", b"old_enc", b"old_nonce", None)
             .unwrap();
         db.replace_content(id, "k", b"old_enc", b"old_nonce", b"new_enc", b"new_nonce")
             .unwrap();
@@ -667,7 +690,7 @@ mod tests {
     #[test]
     fn replace_content_increments_version() {
         let db = mem_db();
-        let id = db.insert_item("k", "note", b"e", b"n").unwrap();
+        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
         db.replace_content(id, "k", b"e", b"n", b"e2", b"n2")
             .unwrap();
         db.replace_content(id, "k", b"e2", b"n2", b"e3", b"n3")

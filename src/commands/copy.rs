@@ -17,7 +17,7 @@ pub fn copy(source: &str, dest: &str, db_path: &std::path::Path) -> Result<()> {
     // Re-encrypt with a fresh nonce
     let content = crypto::decrypt(&key, &item.content_enc, &item.nonce)?;
     let (enc, nonce) = crypto::encrypt(&key, content.as_slice())?;
-    let new_id = db.insert_item(dest, &item.item_type, &enc, &nonce)?;
+    let new_id = db.insert_item(dest, &item.item_type, &enc, &nonce, item.browser.as_deref())?;
 
     // Copy tags, each with a fresh nonce
     for tag in db.get_tags(item.id)? {
