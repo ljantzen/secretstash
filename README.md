@@ -21,8 +21,8 @@ Each item is identified by a short name and versioned: every edit is archived so
 
 Although I believe that the cryptographic primitives implemented in this program are sound, they have not undergone a
 security review. The encryption provided will provide protection from snooping family members, and probably colleagues
-(depending on where you work). But, if youir notes and urls need protection from serious and determined hackers maybe
-you should store them elsewhere.  Consider yourself notified. 
+(depending on where you work). But, if your notes and urls need protection from serious and determined hackers maybe
+you should store them elsewhere. Also review the `Security notes` near the end of this document. Consider yourself notified. 
 
 ## Installation
 
