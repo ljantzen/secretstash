@@ -105,5 +105,6 @@ fn main() -> Result<()> {
             browser,
             clear,
         } => commands::browser::set_browser(&shortname, browser.as_deref(), clear, &db_path),
+        Commands::Migrate => commands::migrate::migrate(&db_path),
     }
 }

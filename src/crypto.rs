@@ -24,19 +24,8 @@ pub fn derive_key(password: &str, salt_b64: &str) -> Result<Zeroizing<[u8; 32]>>
     Ok(key)
 }
 
-pub fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<(Vec<u8>, Vec<u8>)> {
-    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
-    let mut nonce_bytes = [0u8; 12];
-    OsRng
-        .try_fill_bytes(&mut nonce_bytes)
-        .expect("OS RNG failed");
-    let nonce = Nonce::from_slice(&nonce_bytes);
-    let ciphertext = cipher
-        .encrypt(nonce, plaintext)
-        .map_err(|_| anyhow!("Encryption failed"))?;
-    Ok((ciphertext, nonce_bytes.to_vec()))
-}
-
+/// Decrypt ChaCha20-Poly1305 ciphertext. Used by `stash migrate` to convert
+/// old field-level encrypted vaults.
 pub fn decrypt(
     key: &[u8; 32],
     ciphertext: &[u8],
@@ -53,6 +42,19 @@ pub fn decrypt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<(Vec<u8>, Vec<u8>)> {
+        let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+        let mut nonce_bytes = [0u8; 12];
+        OsRng
+            .try_fill_bytes(&mut nonce_bytes)
+            .expect("OS RNG failed");
+        let nonce = Nonce::from_slice(&nonce_bytes);
+        let ciphertext = cipher
+            .encrypt(nonce, plaintext)
+            .map_err(|_| anyhow!("Encryption failed"))?;
+        Ok((ciphertext, nonce_bytes.to_vec()))
+    }
 
     #[test]
     fn roundtrip() {
@@ -88,22 +90,6 @@ mod tests {
         let (mut ct, nonce) = encrypt(&key, b"important data").unwrap();
         ct[0] ^= 0xff;
         assert!(decrypt(&key, &ct, &nonce).is_err());
-    }
-
-    #[test]
-    fn nonces_are_unique() {
-        let key = [0u8; 32];
-        let (_, n1) = encrypt(&key, b"same").unwrap();
-        let (_, n2) = encrypt(&key, b"same").unwrap();
-        assert_ne!(n1, n2);
-    }
-
-    #[test]
-    fn ciphertext_differs_per_call() {
-        let key = [0u8; 32];
-        let (ct1, _) = encrypt(&key, b"same").unwrap();
-        let (ct2, _) = encrypt(&key, b"same").unwrap();
-        assert_ne!(ct1, ct2);
     }
 
     #[test]

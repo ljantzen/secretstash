@@ -48,13 +48,27 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
+      - name: Install Perl (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y perl
+
+      - name: Install Perl (Windows)
+        if: runner.os == 'Windows'
+        uses: shogo82148/actions-setup-perl@v1
+
       - name: Install extra apt packages
         if: matrix.extra_apt != ''
         run: sudo apt-get install -y ${{ matrix.extra_apt }}
 
+      - name: Add NASM to PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "C:\Program Files\NASM" >> $GITHUB_PATH
+
       - name: Build
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+          CC_x86_64_unknown_linux_musl: musl-gcc
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package (Unix)

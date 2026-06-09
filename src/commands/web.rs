@@ -1,8 +1,7 @@
 use anyhow::{Result, anyhow};
 
-use crate::{crypto, db::Db, session};
+use crate::{db::Db, session};
 
-// Known private-mode flags; also used to validate browser names for --private.
 const PRIVATE_FLAGS: &[(&str, &str)] = &[
     ("firefox", "--private-window"),
     ("google-chrome", "--incognito"),
@@ -21,7 +20,7 @@ pub fn web(
     db_path: &std::path::Path,
 ) -> Result<()> {
     let key = session::load_key()?;
-    let db = Db::open(db_path)?;
+    let db = Db::open(db_path, &key)?;
 
     let item = db
         .get_item(shortname)?
@@ -35,10 +34,8 @@ pub fn web(
         ));
     }
 
-    let content = crypto::decrypt(&key, &item.content_enc, &item.nonce)?;
-    let url = String::from_utf8(content.to_vec())?.trim().to_string();
+    let url = item.content.trim().to_string();
 
-    // Priority: --browser flag > per-item stored browser > config browser > system default
     let browser = cli_browser
         .or(item.browser.as_deref())
         .or(cfg_browser)

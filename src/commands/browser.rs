@@ -17,8 +17,8 @@ pub fn set_browser(
         ));
     }
 
-    session::load_key()?;
-    let db = Db::open(db_path)?;
+    let key = session::load_key()?;
+    let db = Db::open(db_path, &key)?;
 
     let item = db
         .get_item(shortname)?

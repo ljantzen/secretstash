@@ -132,6 +132,9 @@ pub enum Commands {
         #[arg(long)]
         clear: bool,
     },
+    /// Migrate an existing vault from the old field-level-encrypted format
+    /// to whole-database SQLCipher encryption
+    Migrate,
 }
 
 #[derive(Subcommand)]
@@ -536,10 +539,16 @@ mod tests {
 
     #[test]
     fn browser_no_args_is_ok_at_parse_level() {
-        // Logic validation (missing both browser and --clear) happens at runtime,
-        // not at parse time, so clap accepts this.
         let cli = parse(&["stash", "browser", "myurl"]).unwrap();
         assert!(matches!(cli.command, Commands::Browser { .. }));
+    }
+
+    // ── migrate ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_migrate() {
+        let cli = parse(&["stash", "migrate"]).unwrap();
+        assert!(matches!(cli.command, Commands::Migrate));
     }
 
     // ── ItemType display ──────────────────────────────────────────────────

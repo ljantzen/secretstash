@@ -1,26 +1,22 @@
 use anyhow::{Result, anyhow};
 
-use super::tag::decrypt_tags;
-use crate::{crypto, db::Db, session};
+use crate::{db::Db, session};
 
 pub fn show(shortname: &str, verbose: bool, copy: bool, db_path: &std::path::Path) -> Result<()> {
     let key = session::load_key()?;
-    let db = Db::open(db_path)?;
+    let db = Db::open(db_path, &key)?;
 
     let item = db
         .get_item(shortname)?
         .ok_or_else(|| anyhow!("Item '{}' not found", shortname))?;
 
-    let content = crypto::decrypt(&key, &item.content_enc, &item.nonce)?;
-    let text = String::from_utf8(content.to_vec())?;
-
     if copy {
-        copy_to_clipboard(text.trim_end())?;
+        copy_to_clipboard(item.content.trim_end())?;
         println!("Copied '{}' to clipboard.", shortname);
         return Ok(());
     }
 
-    let mut tags = decrypt_tags(&db, &key, item.id)?;
+    let mut tags: Vec<String> = db.get_tags(item.id)?.into_iter().map(|t| t.tag).collect();
     tags.sort();
 
     if verbose {
@@ -36,7 +32,7 @@ pub fn show(shortname: &str, verbose: bool, copy: bool, db_path: &std::path::Pat
         println!("updated   : {}", fmt_ts(&item.updated_at));
         println!();
     }
-    println!("{}", text.trim_end());
+    println!("{}", item.content.trim_end());
     if !verbose && !tags.is_empty() {
         println!();
         println!("tags: {}", tags.join(", "));
@@ -49,11 +45,11 @@ fn copy_to_clipboard(text: &str) -> Result<()> {
     use std::process::{Command, Stdio};
 
     let candidates: &[(&str, &[&str])] = &[
-        ("pbcopy", &[]),                         // macOS
-        ("wl-copy", &[]),                        // Wayland
-        ("xclip", &["-selection", "clipboard"]), // X11
-        ("xsel", &["--clipboard", "--input"]),   // X11 alt
-        ("clip.exe", &[]),                       // Windows (also WSL)
+        ("pbcopy", &[]),
+        ("wl-copy", &[]),
+        ("xclip", &["-selection", "clipboard"]),
+        ("xsel", &["--clipboard", "--input"]),
+        ("clip.exe", &[]),
     ];
 
     for (cmd, args) in candidates {

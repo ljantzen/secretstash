@@ -1,7 +1,7 @@
 use anyhow::{Result, anyhow};
 use std::io::{self, Read, Write};
 
-use crate::{cli::ItemType, crypto, db::Db, session};
+use crate::{cli::ItemType, db::Db, session};
 
 #[allow(clippy::too_many_arguments)]
 pub fn add(
@@ -22,7 +22,7 @@ pub fn add(
     }
 
     let key = session::load_key()?;
-    let db = Db::open(db_path)?;
+    let db = Db::open(db_path, &key)?;
 
     if db.item_exists(shortname)? {
         return Err(anyhow!(
@@ -51,8 +51,7 @@ pub fn add(
     }
 
     let type_str = item_type.to_string();
-    let (enc, nonce) = crypto::encrypt(&key, content.as_bytes())?;
-    let item_id = db.insert_item(shortname, &type_str, &enc, &nonce, browser)?;
+    let item_id = db.insert_item(shortname, &type_str, &content, browser)?;
 
     let mut seen = std::collections::HashSet::new();
     for tag in tags {
@@ -60,8 +59,7 @@ pub fn add(
         if tag.is_empty() || !seen.insert(tag) {
             continue;
         }
-        let (tag_enc, tag_nonce) = crypto::encrypt(&key, tag.as_bytes())?;
-        db.add_tag(item_id, &tag_enc, &tag_nonce)?;
+        db.add_tag(item_id, tag)?;
     }
 
     println!("Added '{}' ({}).", shortname, type_str);

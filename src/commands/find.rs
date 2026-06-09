@@ -1,7 +1,6 @@
 use anyhow::{Result, anyhow};
 
-use super::tag::decrypt_tags;
-use crate::{crypto, db::Db, session};
+use crate::{db::Db, session};
 
 pub fn find(
     query: Option<&str>,
@@ -16,7 +15,7 @@ pub fn find(
     }
 
     let key = session::load_key()?;
-    let db = Db::open(db_path)?;
+    let db = Db::open(db_path, &key)?;
     let items = db.list_items()?;
 
     if items.is_empty() {
@@ -35,25 +34,22 @@ pub fn find(
             continue;
         }
 
-        let bytes = crypto::decrypt(&key, &item.content_enc, &item.nonce)?;
-        let text = String::from_utf8_lossy(bytes.as_slice()).into_owned();
-
         if let Some(ref q) = query_lc
-            && !text.to_lowercase().contains(q.as_str())
+            && !item.content.to_lowercase().contains(q.as_str())
         {
             continue;
         }
 
         if let Some(ref tf) = tag_lc {
-            let tags = decrypt_tags(&db, &key, item.id)?;
+            let tags: Vec<String> = db.get_tags(item.id)?.into_iter().map(|t| t.tag).collect();
             if !tags.iter().any(|t| t.to_lowercase() == *tf) {
                 continue;
             }
         }
 
         let snip = match query {
-            Some(q) => snippet(&text, q, 40),
-            None => preview(&text, 80),
+            Some(q) => snippet(&item.content, q, 40),
+            None => preview(&item.content, 80),
         };
         results.push((item.shortname, item.item_type, snip));
     }
@@ -165,7 +161,7 @@ mod tests {
     fn preview_long_text_truncated() {
         let s = preview(&"word ".repeat(30), 20);
         assert!(s.ends_with('…'));
-        assert!(s.chars().count() <= 21); // 20 + ellipsis
+        assert!(s.chars().count() <= 21);
     }
 
     #[test]

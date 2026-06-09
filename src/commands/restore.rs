@@ -5,7 +5,7 @@ use crate::{db::Db, session};
 
 pub fn restore(shortname: &str, version: Option<i64>, db_path: &std::path::Path) -> Result<()> {
     let key = session::load_key()?;
-    let db = Db::open(db_path)?;
+    let db = Db::open(db_path, &key)?;
 
     let item = db
         .get_item(shortname)?
@@ -20,18 +20,7 @@ pub fn restore(shortname: &str, version: Option<i64>, db_path: &std::path::Path)
             .ok_or_else(|| anyhow!("No history to restore for '{}'", shortname))?,
     };
 
-    // Verify the key can decrypt the history entry before committing
-    let _ = crate::crypto::decrypt(&key, &entry.content_enc, &entry.nonce)
-        .map_err(|_| anyhow!("Could not decrypt history entry (wrong key or corrupted data)"))?;
-
-    db.replace_content(
-        item.id,
-        shortname,
-        &item.content_enc,
-        &item.nonce,
-        &entry.content_enc,
-        &entry.nonce,
-    )?;
+    db.replace_content(item.id, shortname, &item.content, &entry.content)?;
 
     println!(
         "Restored '{}' to v{} ({}).",

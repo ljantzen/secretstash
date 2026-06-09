@@ -1,29 +1,24 @@
 use anyhow::{Result, anyhow};
 
-use crate::{crypto, db::Db, session};
+use crate::{db::Db, session};
 
 pub fn add_tags(shortname: &str, new_tags: &[String], db_path: &std::path::Path) -> Result<()> {
     let key = session::load_key()?;
-    let db = Db::open(db_path)?;
+    let db = Db::open(db_path, &key)?;
 
     let item = db
         .get_item(shortname)?
         .ok_or_else(|| anyhow!("Item '{}' not found", shortname))?;
 
-    // Decrypt existing tags so we can deduplicate
-    let existing_tags = decrypt_tags(&db, &key, item.id)?;
+    let existing: Vec<String> = db.get_tags(item.id)?.into_iter().map(|t| t.tag).collect();
 
     let mut added = 0;
     for tag in new_tags {
         let tag = tag.trim();
-        if tag.is_empty() {
+        if tag.is_empty() || existing.contains(&tag.to_string()) {
             continue;
         }
-        if existing_tags.contains(&tag.to_string()) {
-            continue;
-        }
-        let (enc, nonce) = crypto::encrypt(&key, tag.as_bytes())?;
-        db.add_tag(item.id, &enc, &nonce)?;
+        db.add_tag(item.id, tag)?;
         added += 1;
     }
 
@@ -39,7 +34,7 @@ pub fn add_tags(shortname: &str, new_tags: &[String], db_path: &std::path::Path)
 
 pub fn remove_tags(shortname: &str, remove: &[String], db_path: &std::path::Path) -> Result<()> {
     let key = session::load_key()?;
-    let db = Db::open(db_path)?;
+    let db = Db::open(db_path, &key)?;
 
     let item = db
         .get_item(shortname)?
@@ -50,8 +45,7 @@ pub fn remove_tags(shortname: &str, remove: &[String], db_path: &std::path::Path
 
     for tag_to_remove in remove {
         for raw in &raw_tags {
-            let decrypted = crypto::decrypt(&key, &raw.tag_enc, &raw.nonce)?;
-            if String::from_utf8(decrypted.to_vec())? == *tag_to_remove {
+            if raw.tag == *tag_to_remove {
                 db.delete_tag(raw.id)?;
                 removed += 1;
                 break;
@@ -66,56 +60,35 @@ pub fn remove_tags(shortname: &str, remove: &[String], db_path: &std::path::Path
     Ok(())
 }
 
-pub fn decrypt_tags(db: &Db, key: &[u8; 32], item_id: i64) -> Result<Vec<String>> {
-    db.get_tags(item_id)?
-        .into_iter()
-        .map(|t| {
-            let b = crypto::decrypt(key, &t.tag_enc, &t.nonce)?;
-            Ok(String::from_utf8(b.to_vec())?)
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
-
-    fn make_db() -> (NamedTempFile, Db) {
-        let f = NamedTempFile::new().unwrap();
-        let db = Db::open(f.path()).unwrap();
-        (f, db)
-    }
 
     #[test]
-    fn decrypt_tags_empty() {
-        let key = [0x42u8; 32];
-        let (_f, db) = make_db();
-        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
-        assert!(decrypt_tags(&db, &key, id).unwrap().is_empty());
-    }
-
-    #[test]
-    fn decrypt_tags_roundtrip() {
-        let key = [0x42u8; 32];
-        let (_f, db) = make_db();
-        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
-        for tag in ["work", "personal"] {
-            let (enc, nonce) = crypto::encrypt(&key, tag.as_bytes()).unwrap();
-            db.add_tag(id, &enc, &nonce).unwrap();
-        }
-        let tags = decrypt_tags(&db, &key, id).unwrap();
+    fn tags_roundtrip() {
+        let db = Db::open_in_memory().unwrap();
+        let id = db.insert_item("k", "note", "x", None).unwrap();
+        db.add_tag(id, "work").unwrap();
+        db.add_tag(id, "personal").unwrap();
+        let tags: Vec<String> = db
+            .get_tags(id)
+            .unwrap()
+            .into_iter()
+            .map(|t| t.tag)
+            .collect();
         assert_eq!(tags, vec!["work", "personal"]);
     }
 
     #[test]
-    fn decrypt_tags_wrong_key_fails() {
-        let key = [0x42u8; 32];
-        let wrong_key = [0x99u8; 32];
-        let (_f, db) = make_db();
-        let id = db.insert_item("k", "note", b"e", b"n", None).unwrap();
-        let (enc, nonce) = crypto::encrypt(&key, b"work").unwrap();
-        db.add_tag(id, &enc, &nonce).unwrap();
-        assert!(decrypt_tags(&db, &wrong_key, id).is_err());
+    fn tags_empty() {
+        let db = Db::open_in_memory().unwrap();
+        let id = db.insert_item("k", "note", "x", None).unwrap();
+        let tags: Vec<String> = db
+            .get_tags(id)
+            .unwrap()
+            .into_iter()
+            .map(|t| t.tag)
+            .collect();
+        assert!(tags.is_empty());
     }
 }

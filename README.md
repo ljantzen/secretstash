@@ -10,8 +10,8 @@ Each item is identified by a short name and versioned: every edit is archived so
 ## Features
 
 - **Two item types** — `note`, `url`
-- **Encrypted at rest** — ChaCha20-Poly1305 field-level encryption; Argon2id key derivation
-- **Tags** — attach multiple encrypted tags to any item; filter and search by tag
+- **Encrypted at rest** — whole-database SQLCipher encryption (AES-256-CBC); Argon2id key derivation
+- **Tags** — attach multiple tags to any item; filter and search by tag
 - **Version history** — every edit is archived; nothing is silently overwritten
 - **Editor integration** — `$EDITOR` opens for composing or editing any item
 - **Browser integration** — open URL items directly, with optional private/incognito mode; store a per-item preferred browser
@@ -27,7 +27,6 @@ Download the latest release for your platform from the [releases page](https://g
 |----------|---------|
 | Linux x86_64 (glibc) | `stash-linux-x86_64.tar.gz` |
 | Linux x86_64 (musl / static) | `stash-linux-x86_64-musl.tar.gz` |
-| macOS x86_64 (Intel) | `stash-macos-x86_64.tar.gz` |
 | macOS aarch64 (Apple Silicon) | `stash-macos-aarch64.tar.gz` |
 | Windows x86_64 | `stash-windows-x86_64.zip` |
 
@@ -71,7 +70,8 @@ The database path is resolved in this order (first match wins):
 
 | File | Purpose |
 |------|---------|
-| `~/.local/share/stash/stash.db` | Encrypted SQLite database |
+| `~/.local/share/stash/stash.db` | SQLCipher-encrypted database |
+| `~/.local/share/stash/stash.salt` | Argon2id salt for key derivation (mode 0600) |
 | `~/.local/share/stash/.session` | Cached session key (mode 0600) |
 
 On macOS the base directory is `~/Library/Application Support/stash/`.
@@ -162,8 +162,11 @@ stash restore todo --version 2
 # End the session
 stash auth logout
 
-# Change the master password (re-encrypts the entire vault)
+# Change the master password (re-keys the database in place)
 stash auth reset
+
+# Migrate an existing vault from the old field-level-encrypted format
+stash migrate
 ```
 
 ## Command reference
@@ -191,8 +194,8 @@ Removes the cached session key. The vault database is not affected.
 
 Changes the master password. Prompts for the current password (to verify it),
 then prompts for the new password (minimum 12 characters, with confirmation).
-All item content, version history, and tags are re-encrypted under the new key
-in a single atomic transaction — the vault is never left in a partial state.
+The database is re-keyed in place via SQLCipher's `PRAGMA rekey` — a single
+atomic operation that re-encrypts every page of the database file.
 The current session is cleared on success; run `stash auth login` afterward.
 
 ### `stash add`
@@ -304,7 +307,20 @@ Renames an item. Fails if `<new-name>` is already in use.
 ### `stash copy <shortname> <dest>`
 
 Copies an item (content, type, and tags) to a new shortname. History is not
-copied. Each field is re-encrypted with a fresh nonce.
+copied.
+
+### `stash migrate`
+
+Converts a vault from the old field-level-encrypted plain SQLite format to
+the current whole-database SQLCipher format. Run this once after upgrading from
+v1.0.x.
+
+The same master password is used — no password change is required. The migration
+writes a new encrypted database to a sibling file first, then renames it into
+place atomically. The original file is not modified until the rename succeeds,
+so a crash mid-migration leaves the old vault intact.
+
+After migration, run `stash auth login` to start a new session.
 
 ### `stash restore <shortname>`
 
@@ -318,12 +334,14 @@ archived before the restore, so the full history is preserved.
 
 ## Security notes
 
-- The database file is **not** encrypted as a whole; only the content fields are.
-  Metadata (shortnames, types, timestamps) is stored in plaintext.
-- **Tags are encrypted** — each tag is encrypted individually with its own random
-  nonce, so tag values are never stored in plaintext.
-- The session file stores the raw 32-byte key in base64. It is written with
-  mode 0600 and lives only as long as you stay logged in.
+- The **entire database file** is encrypted with SQLCipher (AES-256-CBC with
+  HMAC-SHA512 page authentication). Shortnames, types, tags, content, and
+  timestamps are all opaque to anyone without the key.
+- The **salt file** (`stash.salt`) is stored in plaintext alongside the database.
+  It contains the Argon2id salt used to derive the encryption key from your
+  master password. Losing it means losing access to the vault.
+- The **session file** stores the raw 32-byte derived key in base64. It is
+  written with mode 0600 and removed on `stash auth logout`.
 - `$EDITOR` opens items in a temporary file. Some editors create swap or backup
   files in the same directory.
 

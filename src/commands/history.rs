@@ -1,11 +1,11 @@
 use anyhow::{Result, anyhow};
 
 use super::show::fmt_ts;
-use crate::{crypto, db::Db, session};
+use crate::{db::Db, session};
 
 pub fn history(shortname: &str, db_path: &std::path::Path) -> Result<()> {
     let key = session::load_key()?;
-    let db = Db::open(db_path)?;
+    let db = Db::open(db_path, &key)?;
 
     let item = db
         .get_item(shortname)?
@@ -16,17 +16,13 @@ pub fn history(shortname: &str, db_path: &std::path::Path) -> Result<()> {
     println!("History for '{}' ({}):", item.shortname, item.item_type);
 
     for entry in &entries {
-        let bytes = crypto::decrypt(&key, &entry.content_enc, &entry.nonce)?;
-        let text = String::from_utf8(bytes.to_vec())?;
         println!();
         println!("─── v{} ({}) ───", entry.version, fmt_ts(&entry.created_at));
-        println!("{}", text.trim_end());
+        println!("{}", entry.content.trim_end());
     }
 
-    let bytes = crypto::decrypt(&key, &item.content_enc, &item.nonce)?;
-    let current = String::from_utf8(bytes.to_vec())?;
     println!();
     println!("─── current ({}) ───", fmt_ts(&item.updated_at));
-    println!("{}", current.trim_end());
+    println!("{}", item.content.trim_end());
     Ok(())
 }

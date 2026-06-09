@@ -18,7 +18,7 @@ dirs = "6"
 open = "5"
 rand_core = { version = "0.9", features = ["os_rng"] }
 rpassword = "7"
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl"] }
 serde = { version = "1", features = ["derive"] }
 tempfile = "3"
 toml = "0.8"
