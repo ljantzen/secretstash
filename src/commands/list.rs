@@ -1,6 +1,5 @@
 use anyhow::Result;
 
-use super::tag::decrypt_tags;
 use crate::{db::Db, session};
 
 pub fn list(
@@ -9,7 +8,7 @@ pub fn list(
     db_path: &std::path::Path,
 ) -> Result<()> {
     let key = session::load_key()?;
-    let db = Db::open(db_path)?;
+    let db = Db::open(db_path, &key)?;
     let items = db.list_items()?;
 
     if items.is_empty() {
@@ -27,7 +26,7 @@ pub fn list(
             continue;
         }
 
-        let mut tags = decrypt_tags(&db, &key, item.id)?;
+        let mut tags: Vec<String> = db.get_tags(item.id)?.into_iter().map(|t| t.tag).collect();
         tags.sort();
 
         if !filters_lc.is_empty() {

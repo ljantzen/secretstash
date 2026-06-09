@@ -4,8 +4,8 @@ use std::io::{self, BufRead, Write};
 use crate::{db::Db, session};
 
 pub fn purge(shortname: &str, force: bool, db_path: &std::path::Path) -> Result<()> {
-    session::load_key()?;
-    let db = Db::open(db_path)?;
+    let key = session::load_key()?;
+    let db = Db::open(db_path, &key)?;
 
     if !db.item_exists(shortname)? {
         return Err(anyhow!("Item '{}' not found", shortname));

@@ -6,6 +6,7 @@ pub mod edit;
 pub mod find;
 pub mod history;
 pub mod list;
+pub mod migrate;
 pub mod purge;
 pub mod rename;
 pub mod restore;
