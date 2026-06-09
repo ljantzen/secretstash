@@ -64,6 +64,46 @@ pub fn write_salt_file(path: &Path, salt: &str) -> Result<()> {
     Ok(())
 }
 
+/// Pre-create `path` as an empty file with mode 0600 if it does not yet exist,
+/// so that a program which would otherwise create it world-readable (e.g.
+/// SQLite creating a fresh database) never gets the chance. No-op on non-Unix
+/// and when the file already exists. Best effort: errors are ignored.
+#[cfg(unix)]
+pub fn precreate_private(path: &Path) {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    if !path.exists() {
+        let _ = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(path);
+    }
+}
+
+#[cfg(not(unix))]
+pub fn precreate_private(_path: &Path) {}
+
+/// Tighten permissions to 0600 on a database file and its WAL/SHM sidecars,
+/// which SQLite may create with the process umask. Best effort: missing files
+/// and errors are ignored. No-op on non-Unix.
+#[cfg(unix)]
+pub fn restrict_db_permissions(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    for suffix in ["", "-wal", "-shm"] {
+        let mut p = path.as_os_str().to_os_string();
+        p.push(suffix);
+        let p = PathBuf::from(p);
+        if p.exists() {
+            let _ = std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600));
+        }
+    }
+}
+
+#[cfg(not(unix))]
+pub fn restrict_db_permissions(_path: &Path) {}
+
 pub fn load_config() -> Result<Config> {
     let path = config_path()?;
     if !path.exists() {

@@ -19,46 +19,34 @@ pub fn clear() {
     platform::clear();
 }
 
-// ── macOS — Keychain via `security` CLI ───────────────────────────────────
+// ── macOS — Keychain via the Security framework ───────────────────────────
+//
+// Uses the SecKeychain API directly rather than shelling out to the `security`
+// CLI. The CLI takes the secret as a `-w <password>` argument, which is visible
+// to other processes via `ps`; the API keeps the key material out of any argv.
 
 #[cfg(target_os = "macos")]
 mod platform {
     use super::{ACCOUNT, SERVICE};
+    use security_framework::passwords::{
+        delete_generic_password, get_generic_password, set_generic_password,
+    };
     use zeroize::Zeroizing;
 
     pub fn save(content: &str) -> bool {
-        std::process::Command::new("security")
-            .args([
-                "add-generic-password",
-                "-U",
-                "-a",
-                ACCOUNT,
-                "-s",
-                SERVICE,
-                "-w",
-                content,
-            ])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
+        set_generic_password(SERVICE, ACCOUNT, content.as_bytes()).is_ok()
     }
 
     pub fn load() -> Option<Zeroizing<String>> {
-        let out = std::process::Command::new("security")
-            .args(["find-generic-password", "-a", ACCOUNT, "-s", SERVICE, "-w"])
-            .output()
-            .ok()?;
-        if out.status.success() && !out.stdout.is_empty() {
-            Some(Zeroizing::new(String::from_utf8(out.stdout).ok()?))
-        } else {
-            None
+        let bytes = get_generic_password(SERVICE, ACCOUNT).ok()?;
+        if bytes.is_empty() {
+            return None;
         }
+        Some(Zeroizing::new(String::from_utf8(bytes).ok()?))
     }
 
     pub fn clear() {
-        let _ = std::process::Command::new("security")
-            .args(["delete-generic-password", "-a", ACCOUNT, "-s", SERVICE])
-            .status();
+        let _ = delete_generic_password(SERVICE, ACCOUNT);
     }
 }
 

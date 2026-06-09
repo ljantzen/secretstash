@@ -1,6 +1,7 @@
 use anyhow::{Result, anyhow};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use rusqlite::{Connection, params};
+use zeroize::Zeroizing;
 
 use crate::{config, crypto};
 
@@ -208,8 +209,13 @@ pub(crate) fn migrate_with_password(db_path: &std::path::Path, password: &str) -
     for item in &old_items {
         let content = crypto::decrypt(&key, &item.content_enc, &item.nonce)
             .map_err(|e| anyhow!("Failed to decrypt '{}': {e}", item.shortname))?;
-        let content_str = String::from_utf8(content.to_vec())
-            .map_err(|e| anyhow!("Non-UTF-8 content in '{}': {e}", item.shortname))?;
+        // Validate UTF-8 by borrowing the still-zeroized bytes, then keep the
+        // decrypted plaintext in a Zeroizing<String> so it is wiped on drop.
+        let content_str = Zeroizing::new(
+            std::str::from_utf8(&content)
+                .map_err(|e| anyhow!("Non-UTF-8 content in '{}': {e}", item.shortname))?
+                .to_owned(),
+        );
 
         new.execute(
             "INSERT INTO items \
@@ -219,7 +225,7 @@ pub(crate) fn migrate_with_password(db_path: &std::path::Path, password: &str) -
                 item.id,
                 item.shortname,
                 item.item_type,
-                content_str,
+                content_str.as_str(),
                 item.browser,
                 item.created_at,
                 item.updated_at,
@@ -230,25 +236,36 @@ pub(crate) fn migrate_with_password(db_path: &std::path::Path, password: &str) -
     for entry in &old_history {
         let content = crypto::decrypt(&key, &entry.content_enc, &entry.nonce)
             .map_err(|e| anyhow!("Failed to decrypt history entry: {e}"))?;
-        let content_str = String::from_utf8(content.to_vec())
-            .map_err(|e| anyhow!("Non-UTF-8 content in history: {e}"))?;
+        let content_str = Zeroizing::new(
+            std::str::from_utf8(&content)
+                .map_err(|e| anyhow!("Non-UTF-8 content in history: {e}"))?
+                .to_owned(),
+        );
 
         new.execute(
             "INSERT INTO history (item_id, content, version, created_at) \
              VALUES (?1, ?2, ?3, ?4)",
-            params![entry.item_id, content_str, entry.version, entry.created_at],
+            params![
+                entry.item_id,
+                content_str.as_str(),
+                entry.version,
+                entry.created_at
+            ],
         )?;
     }
 
     for tag in &old_tags {
         let tag_bytes = crypto::decrypt(&key, &tag.tag_enc, &tag.nonce)
             .map_err(|e| anyhow!("Failed to decrypt tag: {e}"))?;
-        let tag_str =
-            String::from_utf8(tag_bytes.to_vec()).map_err(|e| anyhow!("Non-UTF-8 tag: {e}"))?;
+        let tag_str = Zeroizing::new(
+            std::str::from_utf8(&tag_bytes)
+                .map_err(|e| anyhow!("Non-UTF-8 tag: {e}"))?
+                .to_owned(),
+        );
 
         new.execute(
             "INSERT INTO item_tags (item_id, tag) VALUES (?1, ?2)",
-            params![tag.item_id, tag_str],
+            params![tag.item_id, tag_str.as_str()],
         )?;
     }
 
@@ -271,14 +288,25 @@ pub(crate) fn migrate_with_password(db_path: &std::path::Path, password: &str) -
 }
 
 fn open_sqlcipher(path: &std::path::Path, key: &[u8; 32]) -> Result<Connection> {
-    let hex: String = key.iter().map(|b| format!("{b:02x}")).collect();
+    use std::fmt::Write;
+
+    // Create the file with 0600 before SQLite writes any encrypted pages.
+    config::precreate_private(path);
+
+    let mut hex = Zeroizing::new(String::with_capacity(64));
+    for b in key {
+        let _ = write!(hex, "{b:02x}");
+    }
+    let key_pragma = Zeroizing::new(format!("PRAGMA key = \"x'{}'\"", hex.as_str()));
+
     let conn = Connection::open(path)?;
-    conn.execute_batch(&format!("PRAGMA key = \"x'{hex}'\""))?;
+    conn.execute_batch(&key_pragma)?;
     conn.execute_batch(
         "PRAGMA journal_mode=WAL; \
          PRAGMA foreign_keys=ON; \
          PRAGMA secure_delete=ON;",
     )?;
+    config::restrict_db_permissions(path);
     Ok(conn)
 }
 

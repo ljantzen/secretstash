@@ -1,6 +1,9 @@
 use anyhow::{Result, anyhow};
 use rusqlite::{Connection, params};
 use std::path::Path;
+use zeroize::Zeroizing;
+
+use crate::config;
 
 pub struct Db {
     conn: Connection,
@@ -27,8 +30,17 @@ pub struct Tag {
     pub tag: String,
 }
 
-fn hex_key(key: &[u8; 32]) -> String {
-    key.iter().map(|b| format!("{b:02x}")).collect()
+/// Hex-encode a key into a `Zeroizing` string so the only copies of the key
+/// material in this representation are wiped when dropped. Writing into a
+/// pre-sized buffer avoids the per-byte temporary allocations that
+/// `map(format!).collect()` would leave un-zeroized on the heap.
+fn hex_key(key: &[u8; 32]) -> Zeroizing<String> {
+    use std::fmt::Write;
+    let mut s = Zeroizing::new(String::with_capacity(64));
+    for b in key {
+        let _ = write!(s, "{b:02x}");
+    }
+    s
 }
 
 impl Db {
@@ -36,8 +48,13 @@ impl Db {
     /// Returns an error if the file exists but the key is wrong, with a hint
     /// to run `stash migrate` when the file looks like a plain SQLite DB.
     pub fn open(path: &Path, key: &[u8; 32]) -> Result<Self> {
+        // Create the DB file with 0600 up front so SQLite never materialises a
+        // fresh vault with the process umask (typically world-readable).
+        config::precreate_private(path);
+
         let conn = Connection::open(path)?;
-        conn.execute_batch(&format!("PRAGMA key = \"x'{}'\"", hex_key(key)))?;
+        let key_pragma = Zeroizing::new(format!("PRAGMA key = \"x'{}'\"", hex_key(key).as_str()));
+        conn.execute_batch(&key_pragma)?;
         conn.execute_batch(
             "PRAGMA journal_mode=WAL; \
              PRAGMA foreign_keys=ON; \
@@ -53,6 +70,8 @@ impl Db {
                 anyhow!("Cannot open vault: wrong password or corrupted database.")
             }
         })?;
+        // The WAL/SHM sidecars are created by the pragma above; lock them down too.
+        config::restrict_db_permissions(path);
         let db = Self { conn };
         db.migrate()?;
         Ok(db)
@@ -107,8 +126,11 @@ impl Db {
 
     /// Change the SQLCipher encryption key (used by `stash auth reset`).
     pub fn rekey(&self, new_key: &[u8; 32]) -> Result<()> {
-        self.conn
-            .execute_batch(&format!("PRAGMA rekey = \"x'{}'\"", hex_key(new_key)))?;
+        let rekey_pragma = Zeroizing::new(format!(
+            "PRAGMA rekey = \"x'{}'\"",
+            hex_key(new_key).as_str()
+        ));
+        self.conn.execute_batch(&rekey_pragma)?;
         Ok(())
     }
 
@@ -385,6 +407,39 @@ mod tests {
             msg.contains("wrong password") || msg.contains("corrupted"),
             "expected wrong-password error, got: {msg}"
         );
+    }
+
+    // ── file permissions ─────────────────────────────────────────────────
+
+    #[cfg(unix)]
+    #[test]
+    fn open_creates_vault_with_0600_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("vault.db");
+        let key = [0x42u8; 32];
+
+        let db = Db::open(&path, &key).unwrap();
+        db.insert_item("k", "note", "x", None).unwrap();
+
+        // The main DB file and any WAL/SHM sidecars must not be group/world
+        // accessible — only the owner may read the encrypted vault.
+        for suffix in ["", "-wal", "-shm"] {
+            let mut p = path.as_os_str().to_os_string();
+            p.push(suffix);
+            let p = std::path::PathBuf::from(p);
+            if p.exists() {
+                let mode = std::fs::metadata(&p).unwrap().permissions().mode() & 0o777;
+                assert_eq!(
+                    mode,
+                    0o600,
+                    "{} has mode {:o}, expected 600",
+                    p.display(),
+                    mode
+                );
+            }
+        }
     }
 
     // ── SQLCipher proof-of-concept ────────────────────────────────────────
