@@ -21,7 +21,7 @@ rpassword = "7"
 rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl"] }
 serde = { version = "1", features = ["derive"] }
 tempfile = "3"
-toml = "0.8"
+toml = "1.1"
 zeroize = "1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
