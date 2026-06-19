@@ -29,8 +29,8 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Auth { action } => match action {
-            AuthAction::Login => {
-                let timeout = cfg.session_timeout_minutes.unwrap_or(15);
+            AuthAction::Login { timeout } => {
+                let timeout = timeout.or(cfg.session_timeout_minutes).unwrap_or(15);
                 commands::auth::login(&db_path, timeout)
             }
             AuthAction::Logout => commands::auth::logout(),
@@ -105,6 +105,13 @@ fn main() -> Result<()> {
             browser,
             clear,
         } => commands::browser::set_browser(&shortname, browser.as_deref(), clear, &db_path),
+        Commands::Import { file, overwrite } => {
+            commands::import::import(overwrite, file.as_deref(), &db_path)
+        }
+        Commands::Export {
+            output,
+            include_history,
+        } => commands::export::export(include_history, output.as_deref(), &db_path),
         Commands::Migrate => commands::migrate::migrate(&db_path),
     }
 }

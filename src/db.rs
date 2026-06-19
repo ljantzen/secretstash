@@ -150,6 +150,39 @@ impl Db {
         Ok(self.conn.last_insert_rowid())
     }
 
+    pub fn insert_item_full(
+        &self,
+        shortname: &str,
+        item_type: &str,
+        content: &str,
+        browser: Option<&str>,
+        created_at: &str,
+        updated_at: &str,
+    ) -> Result<i64> {
+        self.conn.execute(
+            "INSERT INTO items (shortname, item_type, content, browser, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                shortname, item_type, content, browser, created_at, updated_at
+            ],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn insert_history_entry(
+        &self,
+        item_id: i64,
+        content: &str,
+        version: i64,
+        created_at: &str,
+    ) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO history (item_id, content, version, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params![item_id, content, version, created_at],
+        )?;
+        Ok(())
+    }
+
     pub fn get_item(&self, shortname: &str) -> Result<Option<Item>> {
         match self.conn.query_row(
             "SELECT id, shortname, item_type, content, created_at, updated_at, browser

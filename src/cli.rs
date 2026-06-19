@@ -132,6 +132,23 @@ pub enum Commands {
         #[arg(long)]
         clear: bool,
     },
+    /// Import items from a JSON export file (reads stdin if FILE is omitted)
+    Import {
+        /// Path to the export file
+        file: Option<PathBuf>,
+        /// Replace existing items instead of skipping them
+        #[arg(long)]
+        overwrite: bool,
+    },
+    /// Export all vault items to JSON
+    Export {
+        /// Write output to this file instead of stdout
+        #[arg(short = 'o', long, value_name = "FILE")]
+        output: Option<PathBuf>,
+        /// Include full version history for each item
+        #[arg(long)]
+        include_history: bool,
+    },
     /// Migrate an existing vault from the old field-level-encrypted format
     /// to whole-database SQLCipher encryption
     Migrate,
@@ -140,7 +157,11 @@ pub enum Commands {
 #[derive(Subcommand)]
 pub enum AuthAction {
     /// Authenticate with master password
-    Login,
+    Login {
+        /// Session timeout in minutes (0 = never expire); overrides config
+        #[arg(long, value_name = "MINUTES")]
+        timeout: Option<u64>,
+    },
     /// Clear the current session
     Logout,
     /// Change the master password and re-encrypt the vault
@@ -173,14 +194,42 @@ mod tests {
     // ── auth ──────────────────────────────────────────────────────────────
 
     #[test]
-    fn auth_login() {
+    fn auth_login_no_timeout() {
         let cli = parse(&["stash", "auth", "login"]).unwrap();
-        assert!(matches!(
-            cli.command,
-            Commands::Auth {
-                action: AuthAction::Login
-            }
-        ));
+        if let Commands::Auth {
+            action: AuthAction::Login { timeout },
+        } = cli.command
+        {
+            assert!(timeout.is_none());
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn auth_login_with_timeout() {
+        let cli = parse(&["stash", "auth", "login", "--timeout", "60"]).unwrap();
+        if let Commands::Auth {
+            action: AuthAction::Login { timeout },
+        } = cli.command
+        {
+            assert_eq!(timeout, Some(60));
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn auth_login_timeout_zero_disables_expiry() {
+        let cli = parse(&["stash", "auth", "login", "--timeout", "0"]).unwrap();
+        if let Commands::Auth {
+            action: AuthAction::Login { timeout },
+        } = cli.command
+        {
+            assert_eq!(timeout, Some(0));
+        } else {
+            panic!("wrong variant");
+        }
     }
 
     #[test]
@@ -541,6 +590,85 @@ mod tests {
     fn browser_no_args_is_ok_at_parse_level() {
         let cli = parse(&["stash", "browser", "myurl"]).unwrap();
         assert!(matches!(cli.command, Commands::Browser { .. }));
+    }
+
+    // ── import ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn import_defaults() {
+        let cli = parse(&["stash", "import"]).unwrap();
+        if let Commands::Import { file, overwrite } = cli.command {
+            assert!(file.is_none());
+            assert!(!overwrite);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn import_with_file() {
+        let cli = parse(&["stash", "import", "/tmp/vault.json"]).unwrap();
+        if let Commands::Import { file, .. } = cli.command {
+            assert_eq!(
+                file.as_deref(),
+                Some(std::path::Path::new("/tmp/vault.json"))
+            );
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn import_overwrite() {
+        let cli = parse(&["stash", "import", "--overwrite", "/tmp/vault.json"]).unwrap();
+        if let Commands::Import { overwrite, .. } = cli.command {
+            assert!(overwrite);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    // ── export ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn export_defaults() {
+        let cli = parse(&["stash", "export"]).unwrap();
+        if let Commands::Export {
+            output,
+            include_history,
+        } = cli.command
+        {
+            assert!(output.is_none());
+            assert!(!include_history);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn export_with_output_file() {
+        let cli = parse(&["stash", "export", "-o", "/tmp/vault.json"]).unwrap();
+        if let Commands::Export { output, .. } = cli.command {
+            assert_eq!(
+                output.as_deref(),
+                Some(std::path::Path::new("/tmp/vault.json"))
+            );
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn export_include_history() {
+        let cli = parse(&["stash", "export", "--include-history"]).unwrap();
+        if let Commands::Export {
+            include_history, ..
+        } = cli.command
+        {
+            assert!(include_history);
+        } else {
+            panic!("wrong variant");
+        }
     }
 
     // ── migrate ───────────────────────────────────────────────────────────

@@ -15,6 +15,7 @@ Each item is identified by a short name and versioned: every edit is archived so
 - **Version history** — every edit is archived; nothing is silently overwritten
 - **Editor integration** — `$EDITOR` opens for composing or editing any item
 - **Browser integration** — open URL items directly, with optional private/incognito mode; store a per-item preferred browser
+- **Export / import** — dump the vault to a portable JSON file and restore it to any vault
 - **Self-contained** — bundles SQLite; no external database or service required
 
 ## Disclaimer
@@ -88,6 +89,10 @@ On macOS the base directory is `~/Library/Application Support/stash/`.
 ```sh
 # First run: creates a new vault and prompts for a master password
 stash auth login
+
+# Login with a custom session timeout (overrides config for this session)
+stash auth login --timeout 60   # expire after 60 minutes of inactivity
+stash auth login --timeout 0    # never expire
 
 # Add items
 stash add --type note  --shortname todo  "Buy milk"
@@ -174,11 +179,30 @@ stash auth reset
 
 # Migrate an existing vault from the old field-level-encrypted format
 stash migrate
+
+# Export the entire vault to a JSON file
+stash export -o vault.json
+
+# Export including full version history for each item
+stash export --include-history -o vault-with-history.json
+
+# Import from a JSON export (skips items that already exist)
+stash import vault.json
+
+# Import and overwrite items that already exist
+stash import --overwrite vault.json
+
+# Pipe between vaults (e.g. copy to a different database)
+stash export --include-history | stash import --db /path/to/other.db
 ```
 
 ## Command reference
 
 ### `stash auth login`
+
+```
+stash auth login [--timeout <MINUTES>]
+```
 
 Authenticates against the vault. On first run, creates a new vault and prompts
 you to set a master password (minimum 12 characters). On subsequent runs, prompts
@@ -187,7 +211,16 @@ for the existing password.
 The derived key is cached for up to `session_timeout_minutes` minutes (default
 15; 0 = no timeout). The timeout is a **sliding window** — every stash command
 resets the clock, so the session only expires after that many minutes of
-inactivity. On macOS the key is stored in **Keychain**; on Linux it is stored
+inactivity. Pass `--timeout` to override the config value for this login only:
+
+```sh
+stash auth login --timeout 60   # expire after 60 minutes of inactivity
+stash auth login --timeout 0    # never expire
+```
+
+Timeout resolution order: `--timeout` flag > `session_timeout_minutes` in `stash.toml` > default (15 minutes).
+
+On macOS the key is stored in **Keychain**; on Linux it is stored
 in the **Secret Service** (GNOME Keyring / KWallet) if `secret-tool` is
 available. In both cases the session file (`~/.local/share/stash/.session`,
 mode 0600) is kept as a fallback. The login message notes `(keychain)` when the
@@ -328,6 +361,45 @@ place atomically. The original file is not modified until the rename succeeds,
 so a crash mid-migration leaves the old vault intact.
 
 After migration, run `stash auth login` to start a new session.
+
+### `stash export`
+
+```
+stash export [-o/--output <FILE>] [--include-history]
+```
+
+Exports all vault items to JSON. Output goes to stdout by default so it can be
+piped or redirected; use `-o`/`--output` to write directly to a file.
+
+| Option | Description |
+|--------|-------------|
+| `-o`, `--output <FILE>` | Write to this file instead of stdout |
+| `--include-history` | Include full version history for each item |
+
+The JSON format is versioned (`"version": 1`) and includes the shortname, type,
+content, tags, browser preference, and timestamps for every item.
+
+### `stash import`
+
+```
+stash import [FILE] [--overwrite]
+```
+
+Imports items from a JSON export file. Reads from stdin if `FILE` is omitted,
+making it composable with `stash export` via a pipe.
+
+| Option | Description |
+|--------|-------------|
+| `FILE` | Path to the export file (omit to read from stdin) |
+| `--overwrite` | Replace existing items instead of skipping them |
+
+By default, items whose shortname already exists in the vault are skipped and
+counted in the summary. Pass `--overwrite` to delete the existing item (and its
+history) and replace it with the imported version. History entries present in the
+export file are restored in either case.
+
+Prints a summary on completion: items imported, items skipped, items that failed
+(e.g. unknown type).
 
 ### `stash restore <shortname>`
 
