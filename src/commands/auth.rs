@@ -62,6 +62,56 @@ pub fn login(db_path: &std::path::Path, session_timeout_minutes: u64) -> Result<
     Ok(())
 }
 
+pub fn status() -> Result<()> {
+    match crate::session::get_status() {
+        Err(e) => {
+            println!("{}", e);
+        }
+        Ok(info) => {
+            println!("Logged in.");
+            if info.expiry_secs == u64::MAX {
+                println!("Session does not expire (timeout: 0).");
+            } else {
+                let remaining_secs = info.expiry_secs.saturating_sub(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
+                );
+                println!(
+                    "{} (timeout: {} minute(s)).",
+                    format_remaining(remaining_secs),
+                    info.timeout_minutes
+                );
+            }
+            let storage = if info.via_keychain {
+                "keychain"
+            } else {
+                "session file"
+            };
+            println!("Stored in {}.", storage);
+        }
+    }
+    Ok(())
+}
+
+fn format_remaining(secs: u64) -> String {
+    if secs < 60 {
+        return "Expires in less than a minute.".to_string();
+    }
+    let mins = secs / 60;
+    if mins < 60 {
+        return format!("Expires in {} minute(s).", mins);
+    }
+    let hours = mins / 60;
+    let mins_rem = mins % 60;
+    if mins_rem == 0 {
+        format!("Expires in {} hour(s).", hours)
+    } else {
+        format!("Expires in {} hour(s) {} minute(s).", hours, mins_rem)
+    }
+}
+
 pub fn logout() -> Result<()> {
     session::clear_key()?;
     println!("Logged out.");
@@ -107,6 +157,30 @@ pub fn reset(db_path: &std::path::Path) -> Result<()> {
 mod tests {
     use super::*;
     use rusqlite::Connection;
+
+    #[test]
+    fn format_remaining_sub_minute() {
+        assert_eq!(format_remaining(30), "Expires in less than a minute.");
+        assert_eq!(format_remaining(0), "Expires in less than a minute.");
+    }
+
+    #[test]
+    fn format_remaining_minutes() {
+        assert_eq!(format_remaining(60), "Expires in 1 minute(s).");
+        assert_eq!(format_remaining(2700), "Expires in 45 minute(s).");
+    }
+
+    #[test]
+    fn format_remaining_exact_hours() {
+        assert_eq!(format_remaining(3600), "Expires in 1 hour(s).");
+        assert_eq!(format_remaining(7200), "Expires in 2 hour(s).");
+    }
+
+    #[test]
+    fn format_remaining_hours_and_minutes() {
+        assert_eq!(format_remaining(3660), "Expires in 1 hour(s) 1 minute(s).");
+        assert_eq!(format_remaining(5400), "Expires in 1 hour(s) 30 minute(s).");
+    }
 
     /// `login()` must reject a vault that has a DB file but no salt file
     /// (old field-level-encrypted format) BEFORE attempting any TTY prompt.

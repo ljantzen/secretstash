@@ -33,6 +33,7 @@ fn main() -> Result<()> {
                 let timeout = timeout.or(cfg.session_timeout_minutes).unwrap_or(15);
                 commands::auth::login(&db_path, timeout)
             }
+            AuthAction::Status => commands::auth::status(),
             AuthAction::Logout => commands::auth::logout(),
             AuthAction::Reset => commands::auth::reset(&db_path),
         },

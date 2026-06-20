@@ -107,6 +107,59 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
+pub struct SessionStatus {
+    /// Unix timestamp of expiry; `u64::MAX` means the session never expires.
+    pub expiry_secs: u64,
+    pub timeout_minutes: u64,
+    pub via_keychain: bool,
+}
+
+/// Read session metadata without touching the key or refreshing the expiry.
+pub fn get_status() -> Result<SessionStatus> {
+    if let Some(content) = crate::keychain::load() {
+        if let Ok((expiry_secs, timeout_minutes)) = parse_session_meta(content.trim()) {
+            return Ok(SessionStatus {
+                expiry_secs,
+                timeout_minutes,
+                via_keychain: true,
+            });
+        }
+        crate::keychain::clear();
+    }
+
+    let path = crate::config::session_path()?;
+    let content = fs::read_to_string(&path)
+        .map_err(|_| anyhow!("Not logged in. Run 'stash auth login' to authenticate."))?;
+    let (expiry_secs, timeout_minutes) = parse_session_meta(content.trim())?;
+    Ok(SessionStatus {
+        expiry_secs,
+        timeout_minutes,
+        via_keychain: false,
+    })
+}
+
+fn parse_session_meta(content: &str) -> Result<(u64, u64)> {
+    let corrupt = || anyhow!("Corrupt session file. Run 'stash auth login' again.");
+    let mut lines = content.lines();
+    let expiry: u64 = lines
+        .next()
+        .ok_or_else(corrupt)?
+        .parse()
+        .map_err(|_| corrupt())?;
+    let timeout_minutes: u64 = lines
+        .next()
+        .ok_or_else(corrupt)?
+        .parse()
+        .map_err(|_| corrupt())?;
+
+    if now_secs() > expiry {
+        let _ = crate::config::session_path().map(fs::remove_file);
+        return Err(anyhow!("Session expired. Run 'stash auth login' again."));
+    }
+
+    Ok((expiry, timeout_minutes))
+}
+
 fn parse_session(content: &str) -> Result<(Zeroizing<[u8; 32]>, u64)> {
     let corrupt = || anyhow!("Corrupt session file. Run 'stash auth login' again.");
     let mut lines = content.lines();

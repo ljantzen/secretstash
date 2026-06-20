@@ -162,6 +162,8 @@ pub enum AuthAction {
         #[arg(long, value_name = "MINUTES")]
         timeout: Option<u64>,
     },
+    /// Show current session status
+    Status,
     /// Clear the current session
     Logout,
     /// Change the master password and re-encrypt the vault
@@ -230,6 +232,17 @@ mod tests {
         } else {
             panic!("wrong variant");
         }
+    }
+
+    #[test]
+    fn auth_status() {
+        let cli = parse(&["stash", "auth", "status"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Auth {
+                action: AuthAction::Status
+            }
+        ));
     }
 
     #[test]
