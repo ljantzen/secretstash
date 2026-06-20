@@ -27,11 +27,9 @@ pub enum Commands {
     },
     /// Add a new item
     Add {
-        /// Item type
-        #[arg(short = 't', long = "type", value_name = "TYPE")]
+        /// Item type: url or note
         item_type: ItemType,
         /// Short name (identifier)
-        #[arg(short = 's', long)]
         shortname: String,
         /// Open $EDITOR to compose content
         #[arg(short = 'e', long)]
@@ -269,7 +267,7 @@ mod tests {
 
     #[test]
     fn add_inline_text() {
-        let cli = parse(&["stash", "add", "-t", "note", "-s", "k", "hello"]).unwrap();
+        let cli = parse(&["stash", "add", "note", "k", "hello"]).unwrap();
         if let Commands::Add {
             item_type,
             shortname,
@@ -290,38 +288,32 @@ mod tests {
     }
 
     #[test]
-    fn add_long_flags() {
-        let cli = parse(&[
-            "stash",
-            "add",
-            "--type",
-            "url",
-            "--shortname",
-            "gh",
-            "https://x.com",
-        ])
-        .unwrap();
+    fn add_url_positional() {
+        let cli = parse(&["stash", "add", "url", "gh", "https://x.com"]).unwrap();
         if let Commands::Add {
             item_type,
             shortname,
+            text,
             ..
         } = cli.command
         {
             assert!(matches!(item_type, ItemType::Url));
             assert_eq!(shortname, "gh");
+            assert_eq!(text.as_deref(), Some("https://x.com"));
         } else {
             panic!("wrong variant");
         }
     }
 
     #[test]
-    fn add_rejects_secret_type() {
-        assert!(parse(&["stash", "add", "-t", "secret", "-s", "k", "v"]).is_err());
+    fn add_rejects_invalid_type() {
+        assert!(parse(&["stash", "add", "secret", "k", "v"]).is_err());
+        assert!(parse(&["stash", "add", "image", "k"]).is_err());
     }
 
     #[test]
     fn add_edit_flag() {
-        let cli = parse(&["stash", "add", "-t", "note", "-s", "k", "-e"]).unwrap();
+        let cli = parse(&["stash", "add", "note", "k", "-e"]).unwrap();
         if let Commands::Add {
             edit, stdin, text, ..
         } = cli.command
@@ -336,7 +328,7 @@ mod tests {
 
     #[test]
     fn add_stdin_flag() {
-        let cli = parse(&["stash", "add", "-t", "note", "-s", "k", "--stdin"]).unwrap();
+        let cli = parse(&["stash", "add", "note", "k", "--stdin"]).unwrap();
         if let Commands::Add { edit, stdin, .. } = cli.command {
             assert!(!edit);
             assert!(stdin);
@@ -346,18 +338,9 @@ mod tests {
     }
 
     #[test]
-    fn add_requires_type() {
-        assert!(parse(&["stash", "add", "-s", "k", "text"]).is_err());
-    }
-
-    #[test]
-    fn add_requires_shortname() {
-        assert!(parse(&["stash", "add", "-t", "note", "text"]).is_err());
-    }
-
-    #[test]
-    fn add_rejects_invalid_type() {
-        assert!(parse(&["stash", "add", "-t", "image", "-s", "k"]).is_err());
+    fn add_requires_type_and_shortname() {
+        assert!(parse(&["stash", "add"]).is_err());
+        assert!(parse(&["stash", "add", "note"]).is_err());
     }
 
     // ── show ──────────────────────────────────────────────────────────────
@@ -471,7 +454,7 @@ mod tests {
     #[test]
     fn add_with_tags() {
         let cli = parse(&[
-            "stash", "add", "-t", "note", "-s", "k", "--tag", "work", "--tag", "personal", "text",
+            "stash", "add", "note", "k", "--tag", "work", "--tag", "personal", "text",
         ])
         .unwrap();
         if let Commands::Add { tags, .. } = cli.command {

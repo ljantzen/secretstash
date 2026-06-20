@@ -95,19 +95,19 @@ stash auth login
 stash auth login --timeout 60   # expire after 60 minutes of inactivity
 stash auth login --timeout 0    # never expire
 
-# Add items
-stash add --type note  --shortname todo  "Buy milk"
-stash add --type url   --shortname gh    "https://github.com"
-stash add --type url   --shortname work  "https://example.com" --browser firefox
+# Add items: stash add <type> <name> [content]
+stash add note todo  "Buy milk"
+stash add url  gh    "https://github.com"
+stash add url  work  "https://example.com" --browser firefox
 
 # Add items with tags
-stash add --type note --shortname todo --tag work --tag personal "Buy milk"
+stash add note todo "Buy milk" --tag work --tag personal
 
 # Compose a longer note in your editor
-stash add --type note --shortname journal --edit
+stash add note journal --edit
 
 # Read from stdin
-echo "some text" | stash add --type note --shortname pipe --stdin
+echo "some text" | stash add note pipe --stdin
 
 # Show an item
 stash show todo                 # content only (tags printed if present)
@@ -242,20 +242,20 @@ The current session is cleared on success; run `stash auth login` afterward.
 ### `stash add`
 
 ```
-stash add -t/--type <url|note> -s/--shortname <name> [options] [TEXT]
+stash add <url|note> <name> [TEXT] [options]
 ```
 
-| Option | Description |
-|--------|-------------|
-| `-t`, `--type` | Item type: `url` or `note` (required) |
-| `-s`, `--shortname` | Identifier used in all other commands (required) |
+| Argument / Option | Description |
+|-------------------|-------------|
+| `url\|note` | Item type (required, positional) |
+| `<name>` | Short identifier used in all other commands (required, positional) |
+| `TEXT` | Inline content (optional positional) |
 | `-e`, `--edit` | Open `$EDITOR` to compose content |
 | `--stdin` | Read content from standard input |
 | `-g`, `--tag <TAG>` | Attach a tag (repeatable: `--tag work --tag personal`) |
 | `-b`, `--browser <BROWSER>` | Store a preferred browser for this URL item (url items only) |
-| `TEXT` | Inline content as a positional argument |
 
-Exactly one of `--edit`, `--stdin`, or positional `TEXT` must be supplied.
+Exactly one of `TEXT`, `--edit`, or `--stdin` must be supplied.
 
 ### `stash show <shortname>`
 
