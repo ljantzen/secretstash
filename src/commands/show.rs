@@ -1,8 +1,14 @@
 use anyhow::{Result, anyhow};
 
-use crate::{db::Db, session};
+use crate::{clipboard::Clipboard, db::Db, session};
 
-pub fn show(shortname: &str, verbose: bool, copy: bool, db_path: &std::path::Path) -> Result<()> {
+pub fn show(
+    shortname: &str,
+    verbose: bool,
+    copy: bool,
+    clear_after_secs: u64,
+    db_path: &std::path::Path,
+) -> Result<()> {
     let key = session::load_key()?;
     let db = Db::open(db_path, &key)?;
 
@@ -11,8 +17,15 @@ pub fn show(shortname: &str, verbose: bool, copy: bool, db_path: &std::path::Pat
         .ok_or_else(|| anyhow!("Item '{}' not found", shortname))?;
 
     if copy {
-        copy_to_clipboard(item.content.trim_end())?;
+        let cb = Clipboard::copy(item.content.trim_end())?;
         println!("Copied '{}' to clipboard.", shortname);
+        if clear_after_secs > 0 {
+            cb.schedule_clear(clear_after_secs);
+            println!(
+                "Clipboard will be cleared in {} second(s).",
+                clear_after_secs
+            );
+        }
         return Ok(());
     }
 
@@ -38,37 +51,6 @@ pub fn show(shortname: &str, verbose: bool, copy: bool, db_path: &std::path::Pat
         println!("tags: {}", tags.join(", "));
     }
     Ok(())
-}
-
-fn copy_to_clipboard(text: &str) -> Result<()> {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-
-    let candidates: &[(&str, &[&str])] = &[
-        ("pbcopy", &[]),
-        ("wl-copy", &[]),
-        ("xclip", &["-selection", "clipboard"]),
-        ("xsel", &["--clipboard", "--input"]),
-        ("clip.exe", &[]),
-    ];
-
-    for (cmd, args) in candidates {
-        match Command::new(cmd).args(*args).stdin(Stdio::piped()).spawn() {
-            Ok(mut child) => {
-                child.stdin.take().unwrap().write_all(text.as_bytes())?;
-                child.wait()?;
-                return Ok(());
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(e) => return Err(e.into()),
-        }
-    }
-
-    Err(anyhow!(
-        "No clipboard command found. \
-         Install pbcopy (macOS), wl-clipboard (Wayland), xclip/xsel (X11), \
-         or use Windows where clip.exe is built in."
-    ))
 }
 
 pub fn fmt_ts(ts: &str) -> String {

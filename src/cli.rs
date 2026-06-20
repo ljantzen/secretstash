@@ -56,6 +56,9 @@ pub enum Commands {
         /// Copy content to clipboard instead of printing
         #[arg(short = 'c', long)]
         copy: bool,
+        /// Clear clipboard after this many seconds (requires --copy; overrides config)
+        #[arg(long, value_name = "SECONDS")]
+        clear_after: Option<u64>,
         shortname: String,
     },
     /// Show version history of an item

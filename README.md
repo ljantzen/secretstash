@@ -60,6 +60,7 @@ file if it does not exist.
 # ~/.config/stash/stash.toml
 db = "/mnt/usb/stash.db"
 session_timeout_minutes = 60   # default: 15; set to 0 to disable timeout
+clipboard_clear_seconds = 30   # clear clipboard N seconds after --copy; default: 0 (disabled)
 browser = "firefox"            # preferred browser for `stash web`
 ```
 
@@ -263,6 +264,18 @@ after the content. Add `--verbose` / `-v` to also show the type, timestamps, and
 tags in a metadata header. Add `--copy` / `-c` to copy the content to the
 clipboard instead of printing it (requires `pbcopy` on macOS, `wl-copy` on
 Wayland, `xclip` or `xsel` on X11, or `clip.exe` on Windows/WSL).
+
+Pass `--clear-after <SECONDS>` to automatically clear the clipboard after the
+given number of seconds. This overrides `clipboard_clear_seconds` in `stash.toml`
+for a single invocation:
+
+```sh
+stash show mypassword --copy                  # copy; no automatic clear
+stash show mypassword --copy --clear-after 30 # copy; clear after 30 s
+```
+
+Clear timeout resolution order: `--clear-after` flag > `clipboard_clear_seconds`
+in `stash.toml` > 0 (disabled).
 
 ### `stash edit <shortname>`
 

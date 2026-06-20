@@ -1,4 +1,5 @@
 mod cli;
+mod clipboard;
 mod commands;
 mod config;
 mod crypto;
@@ -59,8 +60,12 @@ fn main() -> Result<()> {
         Commands::Show {
             verbose,
             copy,
+            clear_after,
             shortname,
-        } => commands::show::show(&shortname, verbose, copy, &db_path),
+        } => {
+            let clear_secs = clear_after.or(cfg.clipboard_clear_seconds).unwrap_or(0);
+            commands::show::show(&shortname, verbose, copy, clear_secs, &db_path)
+        }
         Commands::History { shortname } => commands::history::history(&shortname, &db_path),
         Commands::Edit { shortname } => commands::edit::edit(&shortname, &db_path),
         Commands::Web {

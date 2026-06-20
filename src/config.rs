@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 pub struct Config {
     pub db: Option<PathBuf>,
     pub session_timeout_minutes: Option<u64>,
+    pub clipboard_clear_seconds: Option<u64>,
     pub browser: Option<String>,
 }
 
@@ -136,6 +137,12 @@ mod tests {
     fn session_timeout_parsed() {
         let cfg: Config = toml::from_str("session_timeout_minutes = 60").unwrap();
         assert_eq!(cfg.session_timeout_minutes, Some(60));
+    }
+
+    #[test]
+    fn clipboard_clear_seconds_parsed() {
+        let cfg: Config = toml::from_str("clipboard_clear_seconds = 30").unwrap();
+        assert_eq!(cfg.clipboard_clear_seconds, Some(30));
     }
 
     #[test]
