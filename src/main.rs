@@ -9,7 +9,8 @@ mod session;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{CommandFactory, Parser};
+use clap_complete::generate;
 use cli::{AuthAction, Cli, Commands};
 
 fn main() -> Result<()> {
@@ -114,5 +115,9 @@ fn main() -> Result<()> {
             include_history,
         } => commands::export::export(include_history, output.as_deref(), &db_path),
         Commands::Migrate => commands::migrate::migrate(&db_path),
+        Commands::Completions { shell } => {
+            generate(shell, &mut Cli::command(), "stash", &mut std::io::stdout());
+            Ok(())
+        }
     }
 }

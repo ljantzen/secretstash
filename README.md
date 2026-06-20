@@ -411,6 +411,25 @@ Restores an item to a previous version. Without `--version`, restores to the
 most recently archived version (undo last edit). The current content is
 archived before the restore, so the full history is preserved.
 
+### `stash completions <SHELL>`
+
+Prints a shell completion script to stdout. Supported shells: `bash`, `zsh`,
+`fish`, `powershell`, `elvish`.
+
+Source the output in your shell's startup file to get tab-completion for all
+subcommands, flags, and arguments:
+
+```sh
+# bash — add to ~/.bashrc
+source <(stash completions bash)
+
+# zsh — add to ~/.zshrc
+source <(stash completions zsh)
+
+# fish — save to the completions directory
+stash completions fish > ~/.config/fish/completions/stash.fish
+```
+
 ## Security notes
 
 - The **entire database file** is encrypted with SQLCipher (AES-256-CBC with

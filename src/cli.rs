@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueEnum};
+pub use clap_complete::Shell;
 
 #[derive(Parser)]
 #[command(
@@ -152,6 +153,11 @@ pub enum Commands {
     /// Migrate an existing vault from the old field-level-encrypted format
     /// to whole-database SQLCipher encryption
     Migrate,
+    /// Print a shell completion script to stdout
+    Completions {
+        /// Shell to generate completions for
+        shell: Shell,
+    },
 }
 
 #[derive(Subcommand)]
