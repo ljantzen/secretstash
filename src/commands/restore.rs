@@ -20,7 +20,14 @@ pub fn restore(shortname: &str, version: Option<i64>, db_path: &std::path::Path)
             .ok_or_else(|| anyhow!("No history to restore for '{}'", shortname))?,
     };
 
-    db.replace_content(item.id, shortname, &item.content, &entry.content)?;
+    db.replace_content(
+        item.id,
+        shortname,
+        &item.content,
+        item.title.as_deref(),
+        &entry.content,
+        entry.title.as_deref(),
+    )?;
 
     println!(
         "Restored '{}' to v{} ({}).",

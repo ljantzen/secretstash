@@ -14,13 +14,16 @@ pub struct Item {
     pub shortname: String,
     pub item_type: String,
     pub content: String,
+    pub title: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub browser: Option<String>,
+    pub private: Option<bool>,
 }
 
 pub struct HistoryEntry {
     pub content: String,
+    pub title: Option<String>,
     pub version: i64,
     pub created_at: String,
 }
@@ -110,15 +113,35 @@ impl Db {
             );",
         )?;
 
-        let has_browser = self
+        let columns: Vec<String> = self
             .conn
             .prepare("PRAGMA table_info(items)")?
             .query_map([], |row| row.get::<_, String>(1))?
             .filter_map(|r| r.ok())
-            .any(|name| name == "browser");
-        if !has_browser {
+            .collect();
+
+        if !columns.iter().any(|c| c == "browser") {
             self.conn
                 .execute_batch("ALTER TABLE items ADD COLUMN browser TEXT")?;
+        }
+        if !columns.iter().any(|c| c == "private") {
+            self.conn
+                .execute_batch("ALTER TABLE items ADD COLUMN private INTEGER")?;
+        }
+        if !columns.iter().any(|c| c == "title") {
+            self.conn
+                .execute_batch("ALTER TABLE items ADD COLUMN title TEXT")?;
+        }
+
+        let history_cols: Vec<String> = self
+            .conn
+            .prepare("PRAGMA table_info(history)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        if !history_cols.iter().any(|c| c == "title") {
+            self.conn
+                .execute_batch("ALTER TABLE history ADD COLUMN title TEXT")?;
         }
 
         Ok(())
@@ -139,32 +162,33 @@ impl Db {
         shortname: &str,
         item_type: &str,
         content: &str,
+        title: Option<&str>,
         browser: Option<&str>,
     ) -> Result<i64> {
         let now = chrono::Utc::now().to_rfc3339();
         self.conn.execute(
-            "INSERT INTO items (shortname, item_type, content, browser, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
-            params![shortname, item_type, content, browser, now],
+            "INSERT INTO items (shortname, item_type, content, title, browser, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+            params![shortname, item_type, content, title, browser, now],
         )?;
         Ok(self.conn.last_insert_rowid())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn insert_item_full(
         &self,
         shortname: &str,
         item_type: &str,
         content: &str,
+        title: Option<&str>,
         browser: Option<&str>,
         created_at: &str,
         updated_at: &str,
     ) -> Result<i64> {
         self.conn.execute(
-            "INSERT INTO items (shortname, item_type, content, browser, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![
-                shortname, item_type, content, browser, created_at, updated_at
-            ],
+            "INSERT INTO items (shortname, item_type, content, title, browser, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![shortname, item_type, content, title, browser, created_at, updated_at],
         )?;
         Ok(self.conn.last_insert_rowid())
     }
@@ -173,19 +197,20 @@ impl Db {
         &self,
         item_id: i64,
         content: &str,
+        title: Option<&str>,
         version: i64,
         created_at: &str,
     ) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO history (item_id, content, version, created_at) VALUES (?1, ?2, ?3, ?4)",
-            params![item_id, content, version, created_at],
+            "INSERT INTO history (item_id, content, title, version, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![item_id, content, title, version, created_at],
         )?;
         Ok(())
     }
 
     pub fn get_item(&self, shortname: &str) -> Result<Option<Item>> {
         match self.conn.query_row(
-            "SELECT id, shortname, item_type, content, created_at, updated_at, browser
+            "SELECT id, shortname, item_type, content, created_at, updated_at, browser, private, title
              FROM items WHERE shortname=?1",
             params![shortname],
             |row| {
@@ -197,6 +222,8 @@ impl Db {
                     created_at: row.get(4)?,
                     updated_at: row.get(5)?,
                     browser: row.get(6)?,
+                    private: row.get(7)?,
+                    title: row.get(8)?,
                 })
             },
         ) {
@@ -208,7 +235,7 @@ impl Db {
 
     pub fn get_history(&self, item_id: i64) -> Result<Vec<HistoryEntry>> {
         let mut stmt = self.conn.prepare(
-            "SELECT content, version, created_at
+            "SELECT content, version, created_at, title
              FROM history WHERE item_id=?1 ORDER BY version ASC",
         )?;
         let entries = stmt
@@ -217,6 +244,7 @@ impl Db {
                     content: row.get(0)?,
                     version: row.get(1)?,
                     created_at: row.get(2)?,
+                    title: row.get(3)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -264,7 +292,7 @@ impl Db {
 
     pub fn list_items(&self) -> Result<Vec<Item>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, shortname, item_type, content, created_at, updated_at, browser
+            "SELECT id, shortname, item_type, content, created_at, updated_at, browser, private, title
              FROM items ORDER BY shortname ASC",
         )?;
         let items = stmt
@@ -277,6 +305,8 @@ impl Db {
                     created_at: row.get(4)?,
                     updated_at: row.get(5)?,
                     browser: row.get(6)?,
+                    private: row.get(7)?,
+                    title: row.get(8)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -296,7 +326,7 @@ impl Db {
 
     pub fn get_history_version(&self, item_id: i64, version: i64) -> Result<Option<HistoryEntry>> {
         match self.conn.query_row(
-            "SELECT content, version, created_at
+            "SELECT content, version, created_at, title
              FROM history WHERE item_id=?1 AND version=?2",
             params![item_id, version],
             |row| {
@@ -304,6 +334,7 @@ impl Db {
                     content: row.get(0)?,
                     version: row.get(1)?,
                     created_at: row.get(2)?,
+                    title: row.get(3)?,
                 })
             },
         ) {
@@ -315,7 +346,7 @@ impl Db {
 
     pub fn get_latest_history(&self, item_id: i64) -> Result<Option<HistoryEntry>> {
         match self.conn.query_row(
-            "SELECT content, version, created_at
+            "SELECT content, version, created_at, title
              FROM history WHERE item_id=?1 ORDER BY version DESC LIMIT 1",
             params![item_id],
             |row| {
@@ -323,6 +354,7 @@ impl Db {
                     content: row.get(0)?,
                     version: row.get(1)?,
                     created_at: row.get(2)?,
+                    title: row.get(3)?,
                 })
             },
         ) {
@@ -343,6 +375,17 @@ impl Db {
         Ok(())
     }
 
+    pub fn set_private(&self, shortname: &str, private: Option<bool>) -> Result<()> {
+        let n = self.conn.execute(
+            "UPDATE items SET private=?1 WHERE shortname=?2",
+            params![private, shortname],
+        )?;
+        if n == 0 {
+            return Err(anyhow!("Item '{}' not found", shortname));
+        }
+        Ok(())
+    }
+
     pub fn item_exists(&self, shortname: &str) -> Result<bool> {
         let count: i64 = self.conn.query_row(
             "SELECT COUNT(*) FROM items WHERE shortname=?1",
@@ -352,13 +395,15 @@ impl Db {
         Ok(count > 0)
     }
 
-    /// Archive the current content as a history entry and write new content atomically.
+    /// Archive the current content+title as a history entry and write new values atomically.
     pub fn replace_content(
         &self,
         item_id: i64,
         shortname: &str,
         old_content: &str,
+        old_title: Option<&str>,
         new_content: &str,
+        new_title: Option<&str>,
     ) -> Result<()> {
         let tx = self.conn.unchecked_transaction()?;
         let now = chrono::Utc::now().to_rfc3339();
@@ -369,13 +414,13 @@ impl Db {
             |row| row.get(0),
         )?;
         tx.execute(
-            "INSERT INTO history (item_id, content, version, created_at) VALUES (?1, ?2, ?3, ?4)",
-            params![item_id, old_content, version, now],
+            "INSERT INTO history (item_id, content, title, version, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![item_id, old_content, old_title, version, now],
         )?;
 
         let n = tx.execute(
-            "UPDATE items SET content=?1, updated_at=?2 WHERE shortname=?3",
-            params![new_content, now, shortname],
+            "UPDATE items SET content=?1, title=?2, updated_at=?3 WHERE shortname=?4",
+            params![new_content, new_title, now, shortname],
         )?;
         if n == 0 {
             return Err(anyhow!("Item '{}' not found", shortname));
@@ -422,7 +467,7 @@ mod tests {
         // Create a properly-encrypted SQLCipher vault.
         {
             let db = Db::open(&path, &correct_key).unwrap();
-            db.insert_item("k", "note", "x", None).unwrap();
+            db.insert_item("k", "note", "x", None, None).unwrap();
         }
         // A salt file marks this as already-migrated SQLCipher format.
         std::fs::write(&salt_path, "dummy-salt\n").unwrap();
@@ -454,7 +499,7 @@ mod tests {
         let key = [0x42u8; 32];
 
         let db = Db::open(&path, &key).unwrap();
-        db.insert_item("k", "note", "x", None).unwrap();
+        db.insert_item("k", "note", "x", None, None).unwrap();
 
         // The main DB file and any WAL/SHM sidecars must not be group/world
         // accessible — only the owner may read the encrypted vault.
@@ -485,7 +530,7 @@ mod tests {
 
         {
             let db = Db::open(&path, &key).unwrap();
-            db.insert_item("k", "note", "hello sqlcipher", None)
+            db.insert_item("k", "note", "hello sqlcipher", None, None)
                 .unwrap();
         }
 
@@ -509,7 +554,7 @@ mod tests {
 
         {
             let db = Db::open(&path, &key1).unwrap();
-            db.insert_item("k", "note", "secret", None).unwrap();
+            db.insert_item("k", "note", "secret", None, None).unwrap();
             db.rekey(&key2).unwrap();
         }
 
@@ -526,7 +571,7 @@ mod tests {
     #[test]
     fn insert_and_get() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "note", "hello", None).unwrap();
+        let id = db.insert_item("k", "note", "hello", None, None).unwrap();
         assert!(id > 0);
         let item = db.get_item("k").unwrap().unwrap();
         assert_eq!(item.shortname, "k");
@@ -548,7 +593,8 @@ mod tests {
     #[test]
     fn item_exists_true_after_insert() {
         let db = Db::open_in_memory().unwrap();
-        db.insert_item("k", "url", "https://x.com", None).unwrap();
+        db.insert_item("k", "url", "https://x.com", None, None)
+            .unwrap();
         assert!(db.item_exists("k").unwrap());
     }
 
@@ -560,8 +606,8 @@ mod tests {
     #[test]
     fn duplicate_shortname_fails() {
         let db = Db::open_in_memory().unwrap();
-        db.insert_item("k", "note", "a", None).unwrap();
-        assert!(db.insert_item("k", "note", "b", None).is_err());
+        db.insert_item("k", "note", "a", None, None).unwrap();
+        assert!(db.insert_item("k", "note", "b", None, None).is_err());
     }
 
     #[test]
@@ -569,7 +615,7 @@ mod tests {
         assert!(
             Db::open_in_memory()
                 .unwrap()
-                .insert_item("k", "bogus", "x", None)
+                .insert_item("k", "bogus", "x", None, None)
                 .is_err()
         );
     }
@@ -577,7 +623,7 @@ mod tests {
     #[test]
     fn delete_item() {
         let db = Db::open_in_memory().unwrap();
-        db.insert_item("k", "note", "x", None).unwrap();
+        db.insert_item("k", "note", "x", None, None).unwrap();
         db.delete_item("k").unwrap();
         assert!(!db.item_exists("k").unwrap());
     }
@@ -592,15 +638,16 @@ mod tests {
     #[test]
     fn history_empty_for_new_item() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "note", "x", None).unwrap();
+        let id = db.insert_item("k", "note", "x", None, None).unwrap();
         assert!(db.get_history(id).unwrap().is_empty());
     }
 
     #[test]
     fn replace_content_archives_old_and_writes_new() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "note", "old", None).unwrap();
-        db.replace_content(id, "k", "old", "new").unwrap();
+        let id = db.insert_item("k", "note", "old", None, None).unwrap();
+        db.replace_content(id, "k", "old", None, "new", None)
+            .unwrap();
         let item = db.get_item("k").unwrap().unwrap();
         assert_eq!(item.content, "new");
         let history = db.get_history(id).unwrap();
@@ -611,9 +658,9 @@ mod tests {
     #[test]
     fn replace_content_increments_version() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "note", "v1", None).unwrap();
-        db.replace_content(id, "k", "v1", "v2").unwrap();
-        db.replace_content(id, "k", "v2", "v3").unwrap();
+        let id = db.insert_item("k", "note", "v1", None, None).unwrap();
+        db.replace_content(id, "k", "v1", None, "v2", None).unwrap();
+        db.replace_content(id, "k", "v2", None, "v3", None).unwrap();
         let history = db.get_history(id).unwrap();
         assert_eq!(history.len(), 2);
         assert_eq!(history[0].version, 1);
@@ -623,10 +670,12 @@ mod tests {
     #[test]
     fn history_ordered_ascending() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "url", "https://a.com", None).unwrap();
-        db.replace_content(id, "k", "https://a.com", "https://b.com")
+        let id = db
+            .insert_item("k", "url", "https://a.com", None, None)
             .unwrap();
-        db.replace_content(id, "k", "https://b.com", "https://c.com")
+        db.replace_content(id, "k", "https://a.com", None, "https://b.com", None)
+            .unwrap();
+        db.replace_content(id, "k", "https://b.com", None, "https://c.com", None)
             .unwrap();
         let h = db.get_history(id).unwrap();
         assert!(h.windows(2).all(|w| w[0].version < w[1].version));
@@ -637,7 +686,7 @@ mod tests {
     #[test]
     fn add_and_get_tags() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "note", "x", None).unwrap();
+        let id = db.insert_item("k", "note", "x", None, None).unwrap();
         db.add_tag(id, "work").unwrap();
         db.add_tag(id, "personal").unwrap();
         let tags = db.get_tags(id).unwrap();
@@ -649,14 +698,14 @@ mod tests {
     #[test]
     fn get_tags_empty() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "note", "x", None).unwrap();
+        let id = db.insert_item("k", "note", "x", None, None).unwrap();
         assert!(db.get_tags(id).unwrap().is_empty());
     }
 
     #[test]
     fn delete_tag() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "note", "x", None).unwrap();
+        let id = db.insert_item("k", "note", "x", None, None).unwrap();
         db.add_tag(id, "work").unwrap();
         let tag_id = db.get_tags(id).unwrap()[0].id;
         db.delete_tag(tag_id).unwrap();
@@ -666,7 +715,7 @@ mod tests {
     #[test]
     fn tags_cascade_on_item_delete() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "note", "x", None).unwrap();
+        let id = db.insert_item("k", "note", "x", None, None).unwrap();
         db.add_tag(id, "a").unwrap();
         db.add_tag(id, "b").unwrap();
         db.delete_item("k").unwrap();
@@ -676,8 +725,8 @@ mod tests {
     #[test]
     fn tags_are_per_item() {
         let db = Db::open_in_memory().unwrap();
-        let id1 = db.insert_item("a", "note", "x", None).unwrap();
-        let id2 = db.insert_item("b", "note", "y", None).unwrap();
+        let id1 = db.insert_item("a", "note", "x", None, None).unwrap();
+        let id2 = db.insert_item("b", "note", "y", None, None).unwrap();
         db.add_tag(id1, "alpha").unwrap();
         db.add_tag(id2, "beta").unwrap();
         assert_eq!(db.get_tags(id1).unwrap()[0].tag, "alpha");
@@ -700,9 +749,9 @@ mod tests {
     #[test]
     fn list_items_ordered_by_shortname() {
         let db = Db::open_in_memory().unwrap();
-        db.insert_item("charlie", "note", "x", None).unwrap();
-        db.insert_item("alpha", "note", "x", None).unwrap();
-        db.insert_item("bravo", "note", "x", None).unwrap();
+        db.insert_item("charlie", "note", "x", None, None).unwrap();
+        db.insert_item("alpha", "note", "x", None, None).unwrap();
+        db.insert_item("bravo", "note", "x", None, None).unwrap();
         let names: Vec<_> = db
             .list_items()
             .unwrap()
@@ -715,8 +764,8 @@ mod tests {
     #[test]
     fn delete_cascades_to_history() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "note", "v1", None).unwrap();
-        db.replace_content(id, "k", "v1", "v2").unwrap();
+        let id = db.insert_item("k", "note", "v1", None, None).unwrap();
+        db.replace_content(id, "k", "v1", None, "v2", None).unwrap();
         db.delete_item("k").unwrap();
         assert!(db.get_history(id).unwrap().is_empty());
     }
@@ -726,7 +775,7 @@ mod tests {
     #[test]
     fn rename_item() {
         let db = Db::open_in_memory().unwrap();
-        db.insert_item("old", "note", "x", None).unwrap();
+        db.insert_item("old", "note", "x", None, None).unwrap();
         db.rename_item("old", "new").unwrap();
         assert!(db.get_item("old").unwrap().is_none());
         assert_eq!(db.get_item("new").unwrap().unwrap().shortname, "new");
@@ -745,8 +794,8 @@ mod tests {
     #[test]
     fn rename_to_existing_name_fails() {
         let db = Db::open_in_memory().unwrap();
-        db.insert_item("a", "note", "x", None).unwrap();
-        db.insert_item("b", "note", "y", None).unwrap();
+        db.insert_item("a", "note", "x", None, None).unwrap();
+        db.insert_item("b", "note", "y", None, None).unwrap();
         assert!(db.rename_item("a", "b").is_err());
     }
 
@@ -755,8 +804,8 @@ mod tests {
     #[test]
     fn get_history_version_found() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "note", "v1", None).unwrap();
-        db.replace_content(id, "k", "v1", "v2").unwrap();
+        let id = db.insert_item("k", "note", "v1", None, None).unwrap();
+        db.replace_content(id, "k", "v1", None, "v2", None).unwrap();
         let e = db.get_history_version(id, 1).unwrap().unwrap();
         assert_eq!(e.content, "v1");
         assert_eq!(e.version, 1);
@@ -765,17 +814,17 @@ mod tests {
     #[test]
     fn get_history_version_not_found() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "note", "x", None).unwrap();
+        let id = db.insert_item("k", "note", "x", None, None).unwrap();
         assert!(db.get_history_version(id, 99).unwrap().is_none());
     }
 
     #[test]
     fn get_latest_history_returns_max_version() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "note", "v1", None).unwrap();
-        db.replace_content(id, "k", "v1", "v2").unwrap();
-        db.replace_content(id, "k", "v2", "v3").unwrap();
-        db.replace_content(id, "k", "v3", "v4").unwrap();
+        let id = db.insert_item("k", "note", "v1", None, None).unwrap();
+        db.replace_content(id, "k", "v1", None, "v2", None).unwrap();
+        db.replace_content(id, "k", "v2", None, "v3", None).unwrap();
+        db.replace_content(id, "k", "v3", None, "v4", None).unwrap();
         let e = db.get_latest_history(id).unwrap().unwrap();
         assert_eq!(e.version, 3);
         assert_eq!(e.content, "v3");
@@ -784,7 +833,7 @@ mod tests {
     #[test]
     fn get_latest_history_empty() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "note", "x", None).unwrap();
+        let id = db.insert_item("k", "note", "x", None, None).unwrap();
         assert!(db.get_latest_history(id).unwrap().is_none());
     }
 }

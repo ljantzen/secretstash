@@ -67,7 +67,7 @@ mod tests {
     #[test]
     fn tags_roundtrip() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "note", "x", None).unwrap();
+        let id = db.insert_item("k", "note", "x", None, None).unwrap();
         db.add_tag(id, "work").unwrap();
         db.add_tag(id, "personal").unwrap();
         let tags: Vec<String> = db
@@ -82,7 +82,7 @@ mod tests {
     #[test]
     fn tags_empty() {
         let db = Db::open_in_memory().unwrap();
-        let id = db.insert_item("k", "note", "x", None).unwrap();
+        let id = db.insert_item("k", "note", "x", None, None).unwrap();
         let tags: Vec<String> = db
             .get_tags(id)
             .unwrap()

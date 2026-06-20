@@ -19,8 +19,12 @@ struct ImportItem {
     item_type: String,
     content: String,
     #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
     tags: Vec<String>,
     browser: Option<String>,
+    #[serde(default)]
+    private: Option<bool>,
     created_at: String,
     updated_at: String,
     #[serde(default)]
@@ -31,6 +35,8 @@ struct ImportItem {
 struct ImportHistoryEntry {
     version: i64,
     content: String,
+    #[serde(default)]
+    title: Option<String>,
     created_at: String,
 }
 
@@ -104,6 +110,7 @@ fn load_from_str(db: &Db, json: &str, overwrite: bool) -> Result<(usize, usize, 
             &item.shortname,
             &item.item_type,
             &item.content,
+            item.title.as_deref(),
             item.browser.as_deref(),
             &item.created_at,
             &item.updated_at,
@@ -116,9 +123,19 @@ fn load_from_str(db: &Db, json: &str, overwrite: bool) -> Result<(usize, usize, 
             }
         }
 
+        if item.private == Some(true) {
+            db.set_private(&item.shortname, Some(true))?;
+        }
+
         if let Some(history) = item.history {
             for entry in history {
-                db.insert_history_entry(item_id, &entry.content, entry.version, &entry.created_at)?;
+                db.insert_history_entry(
+                    item_id,
+                    &entry.content,
+                    entry.title.as_deref(),
+                    entry.version,
+                    &entry.created_at,
+                )?;
             }
         }
 
@@ -195,7 +212,8 @@ mod tests {
     #[test]
     fn skip_existing_by_default() {
         let db = Db::open_in_memory().unwrap();
-        db.insert_item("gh", "note", "original", None).unwrap();
+        db.insert_item("gh", "note", "original", None, None)
+            .unwrap();
 
         let (imported, skipped, _) = load_from_str(&db, SAMPLE, false).unwrap();
         assert_eq!(imported, 1);
@@ -208,7 +226,8 @@ mod tests {
     #[test]
     fn overwrite_replaces_existing() {
         let db = Db::open_in_memory().unwrap();
-        db.insert_item("gh", "note", "original", None).unwrap();
+        db.insert_item("gh", "note", "original", None, None)
+            .unwrap();
 
         let (imported, skipped, _) = load_from_str(&db, SAMPLE, true).unwrap();
         assert_eq!(imported, 2);

@@ -6,14 +6,15 @@ pub fn set_browser(
     shortname: &str,
     browser: Option<&str>,
     clear: bool,
+    private: Option<bool>,
     db_path: &std::path::Path,
 ) -> Result<()> {
     if browser.is_some() && clear {
         return Err(anyhow!("Cannot use --clear together with a browser name"));
     }
-    if browser.is_none() && !clear {
+    if browser.is_none() && !clear && private.is_none() {
         return Err(anyhow!(
-            "Provide a browser name or pass --clear to remove the stored preference"
+            "Provide a browser name, --clear, --private, or --no-private"
         ));
     }
 
@@ -32,12 +33,23 @@ pub fn set_browser(
         ));
     }
 
-    db.set_browser(shortname, browser)?;
-
-    if clear {
-        println!("Cleared browser preference for '{}'.", shortname);
-    } else {
-        println!("Set browser for '{}' to '{}'.", shortname, browser.unwrap());
+    if browser.is_some() || clear {
+        db.set_browser(shortname, browser)?;
+        if clear {
+            println!("Cleared browser preference for '{}'.", shortname);
+        } else {
+            println!("Set browser for '{}' to '{}'.", shortname, browser.unwrap());
+        }
     }
+
+    if let Some(p) = private {
+        db.set_private(shortname, if p { Some(true) } else { None })?;
+        if p {
+            println!("Set '{}' to always open in private mode.", shortname);
+        } else {
+            println!("Cleared private-mode preference for '{}'.", shortname);
+        }
+    }
+
     Ok(())
 }

@@ -35,6 +35,7 @@ pub fn web(
     }
 
     let url = item.content.trim().to_string();
+    let private = private || item.private.unwrap_or(false);
 
     let browser = cli_browser
         .or(item.browser.as_deref())

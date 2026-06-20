@@ -37,6 +37,9 @@ pub enum Commands {
         /// Read content from stdin
         #[arg(long)]
         stdin: bool,
+        /// Human-readable title
+        #[arg(short = 't', long, value_name = "TITLE")]
+        title: Option<String>,
         /// Tag(s) to attach (repeatable: --tag work --tag personal)
         #[arg(short = 'g', long = "tag", value_name = "TAG")]
         tags: Vec<String>,
@@ -62,7 +65,12 @@ pub enum Commands {
     /// Show version history of an item
     History { shortname: String },
     /// Edit an item in $EDITOR
-    Edit { shortname: String },
+    Edit {
+        shortname: String,
+        /// Set a new title (updates title only, does not open editor)
+        #[arg(short = 't', long, value_name = "TITLE")]
+        title: Option<String>,
+    },
     /// Open a URL item in the browser
     Web {
         /// Open in private/incognito mode
@@ -133,6 +141,12 @@ pub enum Commands {
         /// Remove the stored browser preference
         #[arg(long)]
         clear: bool,
+        /// Always open this URL in private/incognito mode
+        #[arg(long, conflicts_with = "no_private")]
+        private: bool,
+        /// Clear the stored private-mode preference
+        #[arg(long, conflicts_with = "private")]
+        no_private: bool,
     },
     /// Import items from a JSON export file (reads stdin if FILE is omitted)
     Import {
@@ -442,7 +456,7 @@ mod tests {
     #[test]
     fn parse_edit() {
         let cli = parse(&["stash", "edit", "k"]).unwrap();
-        assert!(matches!(cli.command, Commands::Edit { shortname } if shortname == "k"));
+        assert!(matches!(cli.command, Commands::Edit { shortname, .. } if shortname == "k"));
     }
 
     #[test]
@@ -564,6 +578,7 @@ mod tests {
             shortname,
             browser,
             clear,
+            ..
         } = cli.command
         {
             assert_eq!(shortname, "myurl");
@@ -581,11 +596,46 @@ mod tests {
             shortname,
             browser,
             clear,
+            ..
         } = cli.command
         {
             assert_eq!(shortname, "myurl");
             assert!(browser.is_none());
             assert!(clear);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn browser_private_flag() {
+        let cli = parse(&["stash", "browser", "myurl", "--private"]).unwrap();
+        if let Commands::Browser {
+            shortname,
+            private,
+            no_private,
+            ..
+        } = cli.command
+        {
+            assert_eq!(shortname, "myurl");
+            assert!(private);
+            assert!(!no_private);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn browser_no_private_flag() {
+        let cli = parse(&["stash", "browser", "myurl", "--no-private"]).unwrap();
+        if let Commands::Browser {
+            private,
+            no_private,
+            ..
+        } = cli.command
+        {
+            assert!(!private);
+            assert!(no_private);
         } else {
             panic!("wrong variant");
         }

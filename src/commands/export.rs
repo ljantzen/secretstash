@@ -22,6 +22,8 @@ struct ExportItem {
     tags: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     browser: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    private: Option<bool>,
     created_at: String,
     updated_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -32,6 +34,8 @@ struct ExportItem {
 struct ExportHistoryEntry {
     version: i64,
     content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
     created_at: String,
 }
 
@@ -51,6 +55,7 @@ pub fn export(include_history: bool, output: Option<&Path>, db_path: &Path) -> R
                 .map(|h| ExportHistoryEntry {
                     version: h.version,
                     content: h.content,
+                    title: h.title,
                     created_at: h.created_at,
                 })
                 .collect();
@@ -65,6 +70,7 @@ pub fn export(include_history: bool, output: Option<&Path>, db_path: &Path) -> R
             content: item.content,
             tags,
             browser: item.browser,
+            private: item.private,
             created_at: item.created_at,
             updated_at: item.updated_at,
             history,

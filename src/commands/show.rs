@@ -35,8 +35,14 @@ pub fn show(
     if verbose {
         println!("shortname : {}", item.shortname);
         println!("type      : {}", item.item_type);
+        if let Some(t) = &item.title {
+            println!("title     : {}", t);
+        }
         if let Some(b) = &item.browser {
             println!("browser   : {}", b);
+        }
+        if item.private == Some(true) {
+            println!("private   : yes");
         }
         if !tags.is_empty() {
             println!("tags      : {}", tags.join(", "));
@@ -44,6 +50,8 @@ pub fn show(
         println!("created   : {}", fmt_ts(&item.created_at));
         println!("updated   : {}", fmt_ts(&item.updated_at));
         println!();
+    } else if let Some(t) = &item.title {
+        println!("{}", t);
     }
     println!("{}", item.content.trim_end());
     if !verbose && !tags.is_empty() {

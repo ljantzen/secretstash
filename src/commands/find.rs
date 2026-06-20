@@ -34,10 +34,15 @@ pub fn find(
             continue;
         }
 
-        if let Some(ref q) = query_lc
-            && !item.content.to_lowercase().contains(q.as_str())
-        {
-            continue;
+        if let Some(ref q) = query_lc {
+            let content_match = item.content.to_lowercase().contains(q.as_str());
+            let title_match = item
+                .title
+                .as_deref()
+                .is_some_and(|t| t.to_lowercase().contains(q.as_str()));
+            if !content_match && !title_match {
+                continue;
+            }
         }
 
         if let Some(ref tf) = tag_lc {

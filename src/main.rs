@@ -44,6 +44,7 @@ fn main() -> Result<()> {
             shortname,
             edit,
             stdin,
+            title,
             tags,
             browser,
             text,
@@ -54,6 +55,7 @@ fn main() -> Result<()> {
             stdin,
             &tags,
             text.as_deref(),
+            title.as_deref(),
             browser.as_deref(),
             &db_path,
         ),
@@ -67,7 +69,9 @@ fn main() -> Result<()> {
             commands::show::show(&shortname, verbose, copy, clear_secs, &db_path)
         }
         Commands::History { shortname } => commands::history::history(&shortname, &db_path),
-        Commands::Edit { shortname } => commands::edit::edit(&shortname, &db_path),
+        Commands::Edit { shortname, title } => {
+            commands::edit::edit(&shortname, title.as_deref(), &db_path)
+        }
         Commands::Web {
             private,
             browser,
@@ -111,7 +115,24 @@ fn main() -> Result<()> {
             shortname,
             browser,
             clear,
-        } => commands::browser::set_browser(&shortname, browser.as_deref(), clear, &db_path),
+            private,
+            no_private,
+        } => {
+            let private_pref = if private {
+                Some(true)
+            } else if no_private {
+                Some(false)
+            } else {
+                None
+            };
+            commands::browser::set_browser(
+                &shortname,
+                browser.as_deref(),
+                clear,
+                private_pref,
+                &db_path,
+            )
+        }
         Commands::Import { file, overwrite } => {
             commands::import::import(overwrite, file.as_deref(), &db_path)
         }

@@ -18,11 +18,17 @@ pub fn history(shortname: &str, db_path: &std::path::Path) -> Result<()> {
     for entry in &entries {
         println!();
         println!("─── v{} ({}) ───", entry.version, fmt_ts(&entry.created_at));
+        if let Some(t) = &entry.title {
+            println!("title: {}", t);
+        }
         println!("{}", entry.content.trim_end());
     }
 
     println!();
     println!("─── current ({}) ───", fmt_ts(&item.updated_at));
+    if let Some(t) = &item.title {
+        println!("title: {}", t);
+    }
     println!("{}", item.content.trim_end());
     Ok(())
 }

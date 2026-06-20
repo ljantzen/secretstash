@@ -18,6 +18,7 @@ pub fn copy(source: &str, dest: &str, db_path: &std::path::Path) -> Result<()> {
         dest,
         &item.item_type,
         &item.content,
+        item.title.as_deref(),
         item.browser.as_deref(),
     )?;
 

@@ -11,6 +11,7 @@ pub fn add(
     from_stdin: bool,
     tags: &[String],
     text: Option<&str>,
+    title: Option<&str>,
     browser: Option<&str>,
     db_path: &std::path::Path,
 ) -> Result<()> {
@@ -51,7 +52,7 @@ pub fn add(
     }
 
     let type_str = item_type.to_string();
-    let item_id = db.insert_item(shortname, &type_str, &content, browser)?;
+    let item_id = db.insert_item(shortname, &type_str, &content, title, browser)?;
 
     let mut seen = std::collections::HashSet::new();
     for tag in tags {
