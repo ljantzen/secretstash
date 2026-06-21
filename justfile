@@ -13,9 +13,6 @@ build-release:
 
 # Install tasks
 install:
-    cargo install --path stashvault-cli
-
-install-release:
     cargo install --path stashvault-cli --force
 
 uninstall:
