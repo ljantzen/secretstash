@@ -111,16 +111,22 @@ pub enum Commands {
         #[arg(required = true)]
         tags: Vec<String>,
     },
-    /// Search across all item content and/or tags (case-insensitive)
-    Find {
+    /// Search items by content, title, tag, and/or type
+    Search {
+        /// Text or regex to match against content and titles (required unless --tag or --type is given)
+        pattern: Option<String>,
+        /// Treat pattern as a regular expression (case-sensitive; use (?i) for case-insensitive)
+        #[arg(short = 'r', long)]
+        regex: bool,
+        /// Also search archived versions (shown as name:vN)
+        #[arg(short = 'H', long)]
+        include_history: bool,
         /// Filter by tag
         #[arg(short = 'g', long = "tag", value_name = "TAG")]
         tag: Option<String>,
         /// Filter by item type
         #[arg(short = 't', long = "type", value_name = "TYPE")]
         item_type: Option<ItemType>,
-        /// Search term (required unless --tag or --type is used)
-        query: Option<String>,
     },
     /// Rename an item
     Rename { shortname: String, new_name: String },
@@ -511,10 +517,10 @@ mod tests {
     }
 
     #[test]
-    fn find_query_only() {
-        let cli = parse(&["stash", "find", "search term"]).unwrap();
-        if let Commands::Find { query, tag, .. } = cli.command {
-            assert_eq!(query.as_deref(), Some("search term"));
+    fn search_pattern_only() {
+        let cli = parse(&["stash", "search", "search term"]).unwrap();
+        if let Commands::Search { pattern, tag, .. } = cli.command {
+            assert_eq!(pattern.as_deref(), Some("search term"));
             assert!(tag.is_none());
         } else {
             panic!("wrong variant");
@@ -522,10 +528,10 @@ mod tests {
     }
 
     #[test]
-    fn find_tag_only() {
-        let cli = parse(&["stash", "find", "--tag", "work"]).unwrap();
-        if let Commands::Find { query, tag, .. } = cli.command {
-            assert!(query.is_none());
+    fn search_tag_only() {
+        let cli = parse(&["stash", "search", "--tag", "work"]).unwrap();
+        if let Commands::Search { pattern, tag, .. } = cli.command {
+            assert!(pattern.is_none());
             assert_eq!(tag.as_deref(), Some("work"));
         } else {
             panic!("wrong variant");
@@ -533,11 +539,35 @@ mod tests {
     }
 
     #[test]
-    fn find_query_and_tag() {
-        let cli = parse(&["stash", "find", "--tag", "work", "term"]).unwrap();
-        if let Commands::Find { query, tag, .. } = cli.command {
-            assert_eq!(query.as_deref(), Some("term"));
+    fn search_pattern_and_tag() {
+        let cli = parse(&["stash", "search", "--tag", "work", "term"]).unwrap();
+        if let Commands::Search { pattern, tag, .. } = cli.command {
+            assert_eq!(pattern.as_deref(), Some("term"));
             assert_eq!(tag.as_deref(), Some("work"));
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn search_regex_flag() {
+        let cli = parse(&["stash", "search", "--regex", r"\d+"]).unwrap();
+        if let Commands::Search { pattern, regex, .. } = cli.command {
+            assert_eq!(pattern.as_deref(), Some(r"\d+"));
+            assert!(regex);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn search_include_history_flag() {
+        let cli = parse(&["stash", "search", "-H", "term"]).unwrap();
+        if let Commands::Search {
+            include_history, ..
+        } = cli.command
+        {
+            assert!(include_history);
         } else {
             panic!("wrong variant");
         }

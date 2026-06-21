@@ -1,5 +1,5 @@
 [package]
-name = "stashvault-cli"
+name = "secretstash-cli"
 version = "1.0.1"
 edition = "2024"
 
@@ -11,4 +11,4 @@ path = "src/main.rs"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
-stashvault = { path = "../stashvault" }
+secretstash = { path = "../secretstash" }

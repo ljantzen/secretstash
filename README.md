@@ -1,6 +1,6 @@
 # stash
 
-[![CI](https://github.com/ljantzen/stash/actions/workflows/ci.yml/badge.svg)](https://github.com/ljantzen/stash/actions/workflows/ci.yml)
+[![CI](https://github.com/ljantzen/secretstash/actions/workflows/ci.yml/badge.svg)](https://github.com/ljantzen/secretstash/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A command-line manager for notes and URLs — stored in an encrypted local database.
@@ -30,14 +30,14 @@ you should store them elsewhere. Also review the `Security notes` near the end o
 
 ### Pre-built binaries
 
-Download the latest release for your platform from the [releases page](https://github.com/ljantzen/stash/releases):
+Download the latest release for your platform from the [releases page](https://github.com/ljantzen/secretstash/releases):
 
 | Platform | Archive |
 |----------|---------|
-| Linux x86_64 (glibc) | `stash-linux-x86_64.tar.gz` |
-| Linux x86_64 (musl / static) | `stash-linux-x86_64-musl.tar.gz` |
-| macOS aarch64 (Apple Silicon) | `stash-macos-aarch64.tar.gz` |
-| Windows x86_64 | `stash-windows-x86_64.zip` |
+| Linux x86_64 (glibc) | `secretstash-linux-x86_64.tar.gz` |
+| Linux x86_64 (musl / static) | `secretstash-linux-x86_64-musl.tar.gz` |
+| macOS aarch64 (Apple Silicon) | `secretstash-macos-aarch64.tar.gz` |
+| Windows x86_64 | `secretstash-windows-x86_64.zip` |
 
 Extract and place the `stash` binary somewhere on your `$PATH`.
 
@@ -46,7 +46,7 @@ Extract and place the `stash` binary somewhere on your `$PATH`.
 Requires Rust 1.75+.
 
 ```sh
-cargo install --path stash-cli
+cargo install --path secretstash-cli
 ```
 
 ## Configuration
@@ -153,18 +153,27 @@ stash list --type url
 stash tag todo urgent
 stash untag todo personal
 
-# Search across all item content and titles
-stash find "github"
+# Search item content and titles (case-insensitive substring)
+stash search "github"
 
-# Search within a specific tag
-stash find --tag work "meeting"
+# Search using a regular expression (case-sensitive)
+stash search --regex '\d{4}-\d{2}-\d{2}'
 
-# List all items with a given tag (no content search)
-stash find --tag work
+# Case-insensitive regex (use (?i) inline flag)
+stash search --regex '(?i)github'
 
-# Filter by type (combinable with --tag and query)
-stash find --type url
-stash find --type url "github"
+# Also search archived versions (shown as name:vN)
+stash search --include-history "old value"
+stash search --regex --include-history '(?i)todo'
+
+# Filter by tag (no pattern required)
+stash search --tag work
+
+# Filter by type
+stash search --type url
+
+# Combine: pattern + tag + type
+stash search --tag work --type url "meeting"
 
 # Change or clear the stored browser preference for a URL item
 stash browser gh firefox
@@ -383,23 +392,36 @@ Adds one or more tags to an existing item. Duplicate tags are silently ignored.
 Removes one or more tags from an existing item. Tags not present on the item are
 silently ignored.
 
-### `stash find`
+### `stash search`
 
 ```
-stash find [--tag <TAG>] [--type <TYPE>] [QUERY]
+stash search [PATTERN] [--regex] [--include-history] [--tag <TAG>] [--type <TYPE>]
 ```
 
-Searches items by content, title, tag, and/or type (case-insensitive). At least
-one of `QUERY`, `--tag`, or `--type` is required. The query matches against both
-item content and item titles.
+Searches items by content, title, tag, and/or type. At least one of `PATTERN`,
+`--tag`, or `--type` is required.
 
 | Option | Description |
 |--------|-------------|
-| `QUERY` | Text to search for in item content and titles |
+| `PATTERN` | Text or regex to match against content and titles |
+| `-r`, `--regex` | Treat `PATTERN` as a regular expression |
+| `-H`, `--include-history` | Also search archived versions (shown as `name:vN`) |
 | `-g`, `--tag <TAG>` | Restrict results to items that have this tag |
 | `-t`, `--type <TYPE>` | Restrict results to `url` or `note` |
 
-Results show the item name, type, and a snippet of matching content.
+Without `--regex`, matching is a case-insensitive substring search. With
+`--regex`, the pattern is case-sensitive; prefix with `(?i)` for
+case-insensitive regex.
+
+```sh
+stash search "api key"
+stash search --regex '\d{4}-\d{2}-\d{2}'
+stash search --regex '(?i)secret'
+stash search --tag work
+stash search --type url "github"
+stash search --include-history "old password"
+stash search --regex --include-history '(?i)todo'
+```
 
 ### `stash purge <shortname>`
 

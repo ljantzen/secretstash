@@ -1,5 +1,5 @@
 [package]
-name = "stashvault"
+name = "secretstash"
 version = "1.0.1"
 edition = "2024"
 
@@ -12,6 +12,7 @@ chrono = "0.4"
 dirs = "6"
 open = "5"
 rand_core = { version = "0.9", features = ["os_rng"] }
+regex = "1"
 rpassword = "7"
 rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl"] }
 serde = { version = "1", features = ["derive"] }

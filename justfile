@@ -13,7 +13,7 @@ build-release:
 
 # Install tasks
 install:
-    cargo install --path stashvault-cli --force
+    cargo install --path secretstash-cli --force
 
 uninstall:
     cargo uninstall stash
@@ -23,10 +23,10 @@ test:
     cargo test
 
 test-lib:
-    cargo test -p stashvault
+    cargo test -p secretstash
 
 test-cli:
-    cargo test -p stashvault-cli
+    cargo test -p secretstash-cli
 
 test-verbose:
     cargo test -- --nocapture
@@ -55,14 +55,14 @@ lint: fmt-check clippy
 
 # Documentation
 doc:
-    cargo doc -p stashvault --no-deps --open
+    cargo doc -p secretstash --no-deps --open
 
 doc-check:
     cargo doc --no-deps 2>&1 | grep -E "warning|error" || true
 
 # Development
 run *ARGS:
-    cargo run -p stashvault-cli -- {{ARGS}}
+    cargo run -p secretstash-cli -- {{ARGS}}
 
 watch:
     cargo watch -x build -x test

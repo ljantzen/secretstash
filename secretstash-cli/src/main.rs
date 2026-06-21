@@ -6,7 +6,7 @@ use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{AuthAction, Cli, Commands};
-use stashvault::{commands, config};
+use secretstash::{commands, config};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -87,12 +87,16 @@ fn main() -> Result<()> {
         Commands::Untag { shortname, tags } => {
             commands::tag::remove_tags(&shortname, &tags, &db_path)
         }
-        Commands::Find {
-            query,
+        Commands::Search {
+            pattern,
+            regex,
+            include_history,
             tag,
             item_type,
-        } => commands::find::find(
-            query.as_deref(),
+        } => commands::search::search(
+            pattern.as_deref(),
+            regex,
+            include_history,
             tag.as_deref(),
             item_type.as_ref().map(|t| t.to_string()).as_deref(),
             &db_path,

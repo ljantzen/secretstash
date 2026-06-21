@@ -18,23 +18,23 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: stash-linux-x86_64
+            artifact_name: secretstash-linux-x86_64
             archive_ext: tar.gz
 
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            artifact_name: stash-linux-x86_64-musl
+            artifact_name: secretstash-linux-x86_64-musl
             archive_ext: tar.gz
             extra_apt: musl-tools
 
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact_name: stash-macos-aarch64
+            artifact_name: secretstash-macos-aarch64
             archive_ext: tar.gz
 
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: stash-windows-x86_64
+            artifact_name: secretstash-windows-x86_64
             archive_ext: zip
 
     steps:
