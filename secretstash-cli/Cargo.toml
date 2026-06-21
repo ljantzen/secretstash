@@ -2,6 +2,9 @@
 name = "secretstash-cli"
 version = "1.1.0"
 edition = "2024"
+description = "Encrypted command-line manager for notes, URLs, and secrets"
+license = "MIT"
+repository = "https://github.com/ljantzen/secretstash"
 
 [[bin]]
 name = "stash"
@@ -11,4 +14,4 @@ path = "src/main.rs"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
-secretstash = { path = "../secretstash" }
+secretstash = { path = "../secretstash", version = "1.1.0" }
