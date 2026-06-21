@@ -1,11 +1,4 @@
 mod cli;
-mod clipboard;
-mod commands;
-mod config;
-mod crypto;
-mod db;
-mod keychain;
-mod session;
 
 use std::path::PathBuf;
 
@@ -13,6 +6,7 @@ use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{AuthAction, Cli, Commands};
+use stash_lib::{commands, config};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -49,7 +43,7 @@ fn main() -> Result<()> {
             browser,
             text,
         } => commands::add::add(
-            item_type,
+            &item_type.to_string(),
             &shortname,
             edit,
             stdin,

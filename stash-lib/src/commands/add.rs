@@ -1,11 +1,11 @@
 use anyhow::{Result, anyhow};
 use std::io::{self, Read, Write};
 
-use crate::{cli::ItemType, db::Db, session};
+use crate::{db::Db, session};
 
 #[allow(clippy::too_many_arguments)]
 pub fn add(
-    item_type: ItemType,
+    item_type: &str,
     shortname: &str,
     edit: bool,
     from_stdin: bool,
@@ -18,7 +18,7 @@ pub fn add(
     if edit && from_stdin {
         return Err(anyhow!("Cannot use --edit and --stdin together"));
     }
-    if browser.is_some() && !matches!(item_type, ItemType::Url) {
+    if browser.is_some() && item_type != "url" {
         return Err(anyhow!("--browser is only valid for URL items"));
     }
 
@@ -51,8 +51,7 @@ pub fn add(
         return Err(anyhow!("Content cannot be empty"));
     }
 
-    let type_str = item_type.to_string();
-    let item_id = db.insert_item(shortname, &type_str, &content, title, browser)?;
+    let item_id = db.insert_item(shortname, item_type, &content, title, browser)?;
 
     let mut seen = std::collections::HashSet::new();
     for tag in tags {
@@ -63,7 +62,7 @@ pub fn add(
         db.add_tag(item_id, tag)?;
     }
 
-    println!("Added '{}' ({}).", shortname, type_str);
+    println!("Added '{}' ({}).", shortname, item_type);
     Ok(())
 }
 

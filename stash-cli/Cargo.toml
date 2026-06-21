@@ -1,0 +1,14 @@
+[package]
+name = "stash"
+version = "1.0.1"
+edition = "2024"
+
+[[bin]]
+name = "stash"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
+stash-lib = { path = "../stash-lib" }
