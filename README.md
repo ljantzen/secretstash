@@ -11,10 +11,11 @@ Each item is identified by a short name and versioned: every edit is archived so
 
 - **Two item types** — `note`, `url`
 - **Encrypted at rest** — whole-database SQLCipher encryption (AES-256-CBC); Argon2id key derivation
+- **Titles** — optional human-readable title on every item, tracked through version history
 - **Tags** — attach multiple tags to any item; filter and search by tag
 - **Version history** — every edit is archived; nothing is silently overwritten
 - **Editor integration** — `$EDITOR` opens for composing or editing any item
-- **Browser integration** — open URL items directly, with optional private/incognito mode; store a per-item preferred browser
+- **Browser integration** — open URL items directly, with optional private/incognito mode; store a per-item preferred browser and a per-item always-private preference
 - **Export / import** — dump the vault to a portable JSON file and restore it to any vault
 - **Self-contained** — bundles SQLite; no external database or service required
 
@@ -45,7 +46,7 @@ Extract and place the `stash` binary somewhere on your `$PATH`.
 Requires Rust 1.75+.
 
 ```sh
-cargo install --path .
+cargo install --path stash-cli
 ```
 
 ## Configuration
@@ -91,6 +92,9 @@ On macOS the base directory is `~/Library/Application Support/stash/`.
 # First run: creates a new vault and prompts for a master password
 stash auth login
 
+# Login with a password from stdin (useful in scripts)
+echo "mypassword" | stash auth login
+
 # Login with a custom session timeout (overrides config for this session)
 stash auth login --timeout 60   # expire after 60 minutes of inactivity
 stash auth login --timeout 0    # never expire
@@ -99,6 +103,9 @@ stash auth login --timeout 0    # never expire
 stash add note todo  "Buy milk"
 stash add url  gh    "https://github.com"
 stash add url  work  "https://example.com" --browser firefox
+
+# Add an item with a title
+stash add url gh "https://github.com" --title "GitHub"
 
 # Add items with tags
 stash add note todo "Buy milk" --tag work --tag personal
@@ -110,22 +117,29 @@ stash add note journal --edit
 echo "some text" | stash add note pipe --stdin
 
 # Show an item
-stash show todo                 # content only (tags printed if present)
-stash show todo --verbose       # content + metadata (type, timestamps, tags)
-stash show todo --copy          # copy content to clipboard (no terminal output)
+stash show gh                   # prints title (if set) then content
+stash show gh --verbose         # content + metadata (type, title, timestamps, tags)
+stash show gh --copy            # copy content to clipboard (no terminal output)
 
 # Edit an item (opens $EDITOR; old version is archived automatically)
 stash edit todo
 
-# View version history
-stash history todo
+# Update just the title, without opening an editor
+stash edit gh --title "GitHub Home"
+
+# View version history (includes title per version)
+stash history gh
 
 # Open a URL in the browser
 stash web gh
 stash web gh --private          # incognito / private mode
 stash web gh --browser firefox  # use a specific browser (overrides config)
 
-# List all items
+# Store a permanent per-item private-mode preference
+stash browser gh --private      # stash web gh will always open in private mode
+stash browser gh --no-private   # clear that preference
+
+# List all items (TITLE column shown when any item has a title)
 stash list
 
 # List items filtered by tag (OR logic — shows items with any matching tag)
@@ -139,8 +153,8 @@ stash list --type url
 stash tag todo urgent
 stash untag todo personal
 
-# Search across all item content
-stash find "search term"
+# Search across all item content and titles
+stash find "github"
 
 # Search within a specific tag
 stash find --tag work "meeting"
@@ -163,10 +177,10 @@ stash purge todo --force        # skip confirmation (useful in scripts)
 # Rename an item
 stash rename todo todo-done
 
-# Copy an item to a new shortname
+# Copy an item to a new shortname (copies content, title, type, and tags)
 stash copy aws-key aws-key-backup
 
-# Restore an item to its previous version (undo last edit)
+# Restore an item to its previous version (undo last edit; restores title too)
 stash restore todo
 
 # Restore to a specific version
@@ -209,6 +223,14 @@ Authenticates against the vault. On first run, creates a new vault and prompts
 you to set a master password (minimum 12 characters). On subsequent runs, prompts
 for the existing password.
 
+If stdin is not a terminal (i.e., data is piped in), the first line is read as
+the password and the confirmation prompt is skipped. This enables non-interactive
+use in scripts:
+
+```sh
+echo "mypassword" | stash auth login
+```
+
 The derived key is cached for up to `session_timeout_minutes` minutes (default
 15; 0 = no timeout). The timeout is a **sliding window** — every stash command
 resets the clock, so the session only expires after that many minutes of
@@ -250,6 +272,7 @@ stash add <url|note> <name> [TEXT] [options]
 | `url\|note` | Item type (required, positional) |
 | `<name>` | Short identifier used in all other commands (required, positional) |
 | `TEXT` | Inline content (optional positional) |
+| `-t`, `--title <TITLE>` | Human-readable title |
 | `-e`, `--edit` | Open `$EDITOR` to compose content |
 | `--stdin` | Read content from standard input |
 | `-g`, `--tag <TAG>` | Attach a tag (repeatable: `--tag work --tag personal`) |
@@ -259,11 +282,14 @@ Exactly one of `TEXT`, `--edit`, or `--stdin` must be supplied.
 
 ### `stash show <shortname>`
 
-Prints the item's content. If the item has tags they are shown on a `tags:` line
-after the content. Add `--verbose` / `-v` to also show the type, timestamps, and
-tags in a metadata header. Add `--copy` / `-c` to copy the content to the
-clipboard instead of printing it (requires `pbcopy` on macOS, `wl-copy` on
-Wayland, `xclip` or `xsel` on X11, or `clip.exe` on Windows/WSL).
+Prints the item's content. If the item has a title it is printed as a header
+line above the content. If the item has tags they are shown on a `tags:` line
+after the content. Add `--verbose` / `-v` to show all metadata (type, title,
+browser preference, private flag, timestamps, and tags) in a header block.
+
+Add `--copy` / `-c` to copy the content to the clipboard instead of printing it
+(requires `pbcopy` on macOS, `wl-copy` on Wayland, `xclip` or `xsel` on X11,
+or `clip.exe` on Windows/WSL).
 
 Pass `--clear-after <SECONDS>` to automatically clear the clipboard after the
 given number of seconds. This overrides `clipboard_clear_seconds` in `stash.toml`
@@ -279,13 +305,21 @@ in `stash.toml` > 0 (disabled).
 
 ### `stash edit <shortname>`
 
-Opens the item in `$EDITOR`. If the content changes, the previous version is
-automatically saved to history before the update is written.
+```
+stash edit <shortname> [-t/--title <TITLE>]
+```
+
+Without `--title`, opens the item in `$EDITOR`. If the content changes, the
+previous version is automatically saved to history before the update is written.
+
+With `--title <TITLE>`, updates the title only without opening an editor. The
+current content and old title are archived to history as part of the update.
 
 ### `stash history <shortname>`
 
 Shows all archived versions followed by the current content, each labelled with
-its version number and timestamp.
+its version number and timestamp. If a version had a title set, it is shown
+alongside the content for that version.
 
 ### `stash web [-p] [-b <browser>] <shortname>`
 
@@ -295,20 +329,37 @@ private/incognito mode. Pass `-b` / `--browser` to specify a browser binary
 `stash.toml`. Without a specified browser, the system default is used (or, for
 `--private`, tries Firefox, Chrome, Chromium, Brave, and Vivaldi in order).
 
+If the item has a stored private-mode preference (set via `stash browser
+--private`), private mode is activated automatically even without `-p`.
+
 Browser resolution order: `--browser` flag > per-item stored browser (`stash browser`) > `browser` in `stash.toml` > system default.
+
+Private mode resolution order: `-p` flag > per-item stored private preference > off.
 
 Private-mode flags are known for: `firefox` (`--private-window`),
 `google-chrome` / `chrome`, `chromium`, `chromium-browser`, `brave-browser`, `vivaldi`, `vivaldi-stable` (`--incognito`).
 `chrome` is accepted as an alias for `google-chrome`.
 
-### `stash browser <shortname> [<browser> | --clear]`
+### `stash browser <shortname> [<browser>] [--clear] [--private | --no-private]`
 
-Sets or clears the preferred browser stored with a `url`-type item. This
-preference is used by `stash web` when no `--browser` flag is given.
+Sets or clears browser preferences stored with a `url`-type item.
+
+| Option | Description |
+|--------|-------------|
+| `<browser>` | Browser binary to store (e.g. `firefox`) |
+| `--clear` | Remove the stored browser preference |
+| `--private` | Always open this URL in private/incognito mode |
+| `--no-private` | Clear the stored private-mode preference |
+
+Options can be combined: `stash browser gh firefox --private` sets both at once.
+`--private` and `--no-private` are mutually exclusive.
 
 ```sh
-stash browser gh firefox      # set stored browser
-stash browser gh --clear      # remove stored browser preference
+stash browser gh firefox          # set stored browser
+stash browser gh --clear          # remove stored browser preference
+stash browser gh --private        # always open in private mode
+stash browser gh --no-private     # clear private-mode preference
+stash browser gh firefox --private  # set browser and private mode together
 ```
 
 ### `stash list`
@@ -317,7 +368,8 @@ stash browser gh --clear      # remove stored browser preference
 stash list [-g/--tag <TAG>]... [-t/--type <TYPE>]
 ```
 
-Lists all items in a table showing name, type, and tags. Pass one or more
+Lists all items in a table showing name, type, and tags. When at least one item
+has a title, a TITLE column is added to the table. Pass one or more
 `-g`/`--tag` options to show only items that have **any** of the specified tags
 (OR logic). Pass `-t`/`--type` to restrict to a single type (`url` or `note`). Both
 filters can be combined.
@@ -337,12 +389,13 @@ silently ignored.
 stash find [--tag <TAG>] [--type <TYPE>] [QUERY]
 ```
 
-Searches items by content, tag, and/or type (case-insensitive). At least one of
-`QUERY`, `--tag`, or `--type` is required.
+Searches items by content, title, tag, and/or type (case-insensitive). At least
+one of `QUERY`, `--tag`, or `--type` is required. The query matches against both
+item content and item titles.
 
 | Option | Description |
 |--------|-------------|
-| `QUERY` | Text to search for in item content |
+| `QUERY` | Text to search for in item content and titles |
 | `-g`, `--tag <TAG>` | Restrict results to items that have this tag |
 | `-t`, `--type <TYPE>` | Restrict results to `url` or `note` |
 
@@ -359,8 +412,8 @@ Renames an item. Fails if `<new-name>` is already in use.
 
 ### `stash copy <shortname> <dest>`
 
-Copies an item (content, type, and tags) to a new shortname. History is not
-copied.
+Copies an item (content, title, type, and tags) to a new shortname. History is
+not copied.
 
 ### `stash migrate`
 
@@ -390,7 +443,8 @@ piped or redirected; use `-o`/`--output` to write directly to a file.
 | `--include-history` | Include full version history for each item |
 
 The JSON format is versioned (`"version": 1`) and includes the shortname, type,
-content, tags, browser preference, and timestamps for every item.
+content, title, tags, browser preference, private flag, and timestamps for every
+item. History entries include their title at the time of archiving.
 
 ### `stash import`
 
@@ -421,8 +475,9 @@ stash restore <shortname> [--version <N>]
 ```
 
 Restores an item to a previous version. Without `--version`, restores to the
-most recently archived version (undo last edit). The current content is
-archived before the restore, so the full history is preserved.
+most recently archived version (undo last edit). Both content and title are
+restored from the history entry. The current content and title are archived
+before the restore, so the full history is preserved.
 
 ### `stash completions <SHELL>`
 
@@ -446,7 +501,7 @@ stash completions fish > ~/.config/fish/completions/stash.fish
 ## Security notes
 
 - The **entire database file** is encrypted with SQLCipher (AES-256-CBC with
-  HMAC-SHA512 page authentication). Shortnames, types, tags, content, and
+  HMAC-SHA512 page authentication). Shortnames, types, titles, tags, content, and
   timestamps are all opaque to anyone without the key.
 - The **salt file** (`stash.salt`) is stored in plaintext alongside the database.
   It contains the Argon2id salt used to derive the encryption key from your
