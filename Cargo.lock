@@ -985,17 +985,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "stash"
-version = "1.0.1"
-dependencies = [
- "anyhow",
- "clap",
- "clap_complete",
- "stash-lib",
-]
-
-[[package]]
-name = "stash-lib"
+name = "stashvault"
 version = "1.0.1"
 dependencies = [
  "anyhow",
@@ -1014,6 +1004,16 @@ dependencies = [
  "tempfile",
  "toml",
  "zeroize",
+]
+
+[[package]]
+name = "stashvault-cli"
+version = "1.0.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "clap_complete",
+ "stashvault",
 ]
 
 [[package]]

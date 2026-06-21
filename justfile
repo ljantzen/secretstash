@@ -13,10 +13,10 @@ build-release:
 
 # Install tasks
 install:
-    cargo install --path stash-cli
+    cargo install --path stashvault-cli
 
 install-release:
-    cargo install --path stash-cli --force
+    cargo install --path stashvault-cli --force
 
 uninstall:
     cargo uninstall stash
@@ -26,10 +26,10 @@ test:
     cargo test
 
 test-lib:
-    cargo test -p stash-lib
+    cargo test -p stashvault
 
 test-cli:
-    cargo test -p stash
+    cargo test -p stashvault-cli
 
 test-verbose:
     cargo test -- --nocapture
@@ -58,14 +58,14 @@ lint: fmt-check clippy
 
 # Documentation
 doc:
-    cargo doc -p stash-lib --no-deps --open
+    cargo doc -p stashvault --no-deps --open
 
 doc-check:
     cargo doc --no-deps 2>&1 | grep -E "warning|error" || true
 
 # Development
 run *ARGS:
-    cargo run -p stash -- {{ARGS}}
+    cargo run -p stashvault-cli -- {{ARGS}}
 
 watch:
     cargo watch -x build -x test

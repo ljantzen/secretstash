@@ -1,5 +1,5 @@
 [package]
-name = "stash-lib"
+name = "stashvault"
 version = "1.0.1"
 edition = "2024"
 

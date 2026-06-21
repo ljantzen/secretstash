@@ -6,7 +6,7 @@ use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{AuthAction, Cli, Commands};
-use stash_lib::{commands, config};
+use stashvault::{commands, config};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
