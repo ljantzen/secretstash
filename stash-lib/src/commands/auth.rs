@@ -1,8 +1,16 @@
+use std::io::IsTerminal;
+
 use anyhow::{Result, anyhow};
 
 use crate::{config, crypto, db::Db, session};
 
 const MIN_PASSWORD_LEN: usize = 12;
+
+fn read_password_from_stdin() -> Result<String> {
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line)?;
+    Ok(line.trim_end_matches(['\n', '\r']).to_string())
+}
 
 pub fn login(db_path: &std::path::Path, session_timeout_minutes: u64) -> Result<()> {
     let salt_path = config::salt_path_for_db(db_path);
@@ -15,7 +23,18 @@ pub fn login(db_path: &std::path::Path, session_timeout_minutes: u64) -> Result<
         ));
     }
 
-    let password = if is_new_vault {
+    let piped = !std::io::stdin().is_terminal();
+
+    let password = if piped {
+        let pw = read_password_from_stdin()?;
+        if is_new_vault && pw.len() < MIN_PASSWORD_LEN {
+            return Err(anyhow!(
+                "Master password must be at least {} characters",
+                MIN_PASSWORD_LEN
+            ));
+        }
+        pw
+    } else if is_new_vault {
         let pw = rpassword::prompt_password("Create master password: ")?;
         if pw.len() < MIN_PASSWORD_LEN {
             return Err(anyhow!(
