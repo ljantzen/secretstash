@@ -13,10 +13,10 @@ build-release:
 
 # Install tasks
 install:
-    cargo install --path .
+    cargo install --path stash-cli
 
 install-release:
-    cargo install --path . --force
+    cargo install --path stash-cli --force
 
 uninstall:
     cargo uninstall stash
@@ -24,6 +24,12 @@ uninstall:
 # Test tasks
 test:
     cargo test
+
+test-lib:
+    cargo test -p stash-lib
+
+test-cli:
+    cargo test -p stash
 
 test-verbose:
     cargo test -- --nocapture
@@ -48,18 +54,18 @@ clippy-fix:
     cargo clippy --fix --allow-dirty --all-targets --all-features
 
 lint: fmt-check clippy
-    @echo "Linting passed ✓"
+    @echo "Linting passed"
 
 # Documentation
 doc:
-    cargo doc --no-deps --open
+    cargo doc -p stash-lib --no-deps --open
 
 doc-check:
-    cargo doc --no-deps --document-private-items 2>&1 | grep -E "warning|error" || true
+    cargo doc --no-deps 2>&1 | grep -E "warning|error" || true
 
 # Development
 run *ARGS:
-    cargo run -- {{ARGS}}
+    cargo run -p stash -- {{ARGS}}
 
 watch:
     cargo watch -x build -x test
@@ -70,7 +76,6 @@ check-watch:
 # Cleaning
 clean:
     cargo clean
-    rm -rf target/
 
 # Code coverage
 coverage:
@@ -89,7 +94,7 @@ diff:
 squash:
     jj squash
 
-restore:
+jj-restore:
     jj restore
 
 rebase-main:
@@ -103,9 +108,6 @@ git-fetch:
     jj git fetch
 
 # Release tasks
-release-build:
-    cargo build --release
-
 release-check:
     @echo "Running full release checklist..."
     just lint
@@ -118,4 +120,4 @@ fmt-test: fmt
 
 # Quick dev loop
 dev: check test
-    @echo "Development checks passed ✓"
+    @echo "Development checks passed"
