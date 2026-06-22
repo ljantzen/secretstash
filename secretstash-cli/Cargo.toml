@@ -5,6 +5,7 @@ edition = "2024"
 description = "Encrypted command-line manager for notes, URLs, and secrets"
 license = "MIT"
 repository = "https://github.com/ljantzen/secretstash"
+readme = "README.md"
 
 [[bin]]
 name = "stash"
