@@ -9,7 +9,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 REPO_OWNER="ljantzen"
-REPO_NAME="stash"
+REPO_NAME="secretstash"
 WORKFLOW_NAME="Release"
 MAX_WAIT_TIME=1800  # 30 minutes in seconds
 POLL_INTERVAL=10   # Poll every 10 seconds
@@ -47,12 +47,17 @@ check_prerequisites() {
         exit 1
     fi
 
+    if ! command -v jj &> /dev/null; then
+        print_error "jj is not installed (https://github.com/jj-vcs/jj)"
+        exit 1
+    fi
+
     print_success "All prerequisites met"
 }
 
-# Get version from Cargo.toml
+# Get version from the library crate (source of truth for the workspace)
 get_version() {
-    grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2
+    grep '^version = ' secretstash/Cargo.toml | head -1 | cut -d'"' -f2
 }
 
 # Validate version format (semantic versioning)
@@ -65,38 +70,27 @@ validate_version() {
     return 0
 }
 
-# Update version in Cargo.toml (workspace package version + stash
-#-lib dep version)
+# Update version in secretstash/Cargo.toml, secretstash-cli/Cargo.toml,
+# and the secretstash dependency pinned inside secretstash-cli/Cargo.toml.
 update_version() {
     local new_version=$1
     local current_version=$(get_version)
 
     if [ "$new_version" = "$current_version" ]; then
-        print_error "New version ($new_version) is the same as current version in Cargo.toml"
+        print_error "New version ($new_version) is the same as the current version ($current_version)"
         return 1
     fi
 
-    print_info "Updating version from $current_version to $new_version in Cargo.toml..."
+    print_info "Updating version from $current_version to $new_version..."
 
-    # Update [workspace.package] version
-    sed -i "s/^version = \"$current_version\"/version = \"$new_version\"/" Cargo.toml
+    # Library crate package version
+    sed -i "s/^version = \"$current_version\"/version = \"$new_version\"/" secretstash/Cargo.toml
 
-    # Update or add the version field in the stash
-    #-lib workspace dependency so that
-    # the binary crates can resolve it on crates.io after stash
-    #-lib is published.
-    if grep -q 'stash
-    -lib.*version' Cargo.toml; then
-        sed -i "s|stash
-    -lib\(.*\)version = \"[^\"]*\"|stash
-    -lib\1version = \"$new_version\"|" Cargo.toml
-    else
-        sed -i "s|stash
-    -lib\(.*\){ path = \"stash
-    -lib\" }|stash
-    -lib\1{ path = \"stash
-    -lib\", version = \"$new_version\" }|" Cargo.toml
-    fi
+    # CLI crate package version
+    sed -i "s/^version = \"$current_version\"/version = \"$new_version\"/" secretstash-cli/Cargo.toml
+
+    # secretstash dependency pinned inside secretstash-cli
+    sed -i "s|secretstash = { path = \"../secretstash\", version = \"$current_version\" }|secretstash = { path = \"../secretstash\", version = \"$new_version\" }|" secretstash-cli/Cargo.toml
 
     print_success "Version updated to $new_version"
 }
@@ -152,33 +146,24 @@ is_published_on_crates() {
         jq -e ".versions[] | select(.num == \"$version\")" >/dev/null 2>&1
 }
 
-# Validate tag points to expected commit on current branch
+# Validate tag is reachable from origin/main (jj-aware: does not require tag == HEAD)
 validate_tag() {
     local tag=$1
     local expected_branch=${2:-main}
 
-    # Get the commit the tag points to
     local tag_commit=$(git rev-parse "$tag^{commit}" 2>/dev/null || git rev-list -n 1 "$tag")
-    local current_head=$(git rev-parse HEAD)
 
-    # Check if tag points to current HEAD
-    if [ "$tag_commit" != "$current_head" ]; then
-        print_error "Tag $tag points to commit $tag_commit, but current HEAD is $current_head"
-        print_info "This likely means the tag was created on the wrong commit"
-        return 1
-    fi
-
-    # Check if tag commit is reachable from the remote branch
     if ! git merge-base --is-ancestor "$tag_commit" "origin/$expected_branch"; then
-        print_error "Tag $tag does not point to a commit on branch $expected_branch"
+        print_error "Tag $tag ($tag_commit) is not reachable from origin/$expected_branch"
         return 1
     fi
 
-    print_success "Tag $tag validated (points to $tag_commit on $expected_branch)"
+    print_success "Tag $tag validated ($tag_commit is on $expected_branch)"
     return 0
 }
 
 # Create and push version tag
+# Must be called after `jj commit`: the version bump is the parent of the jj working copy (HEAD^).
 create_and_push_tag() {
     local version=$1
     local tag="v$version"
@@ -195,18 +180,19 @@ create_and_push_tag() {
         exit 1
     fi
 
-    git tag -a "$tag" -m "Release version $version"
-    print_success "Tag $tag created"
+    # After `jj commit`, HEAD is the new empty working copy; the version bump
+    # commit is its parent (HEAD^). Tag that commit, not the empty working copy.
+    local bump_commit=$(git rev-parse HEAD^)
+    git tag -a "$tag" "$bump_commit" -m "Release version $version"
+    print_success "Tag $tag created (at $bump_commit)"
 
     print_info "Pushing tag to remote..."
     git push origin "$tag"
     print_success "Tag pushed to remote"
 
-    # Validate tag was created on the correct commit
     print_info "Validating tag..."
     if ! validate_tag "$tag" "main"; then
-        print_error "Tag validation failed - the tag may be on the wrong commit!"
-        print_info "Deleting local tag $tag to prevent pushing incorrect tag"
+        print_error "Tag validation failed!"
         git tag -d "$tag"
         exit 1
     fi
@@ -283,14 +269,10 @@ wait_for_workflow() {
     fi
 }
 
-# Publish to crates.io in dependency order
+# Publish to crates.io in dependency order (library first, then CLI)
 publish_to_crates() {
     local version=$1
-    local crates=("stash
--lib" "stash
--cli" "stash
--ui" "stash
--pomodoro")
+    local crates=("secretstash" "secretstash-cli")
 
     for crate in "${crates[@]}"; do
         if is_published_on_crates "$crate" "$version"; then
@@ -305,9 +287,8 @@ publish_to_crates() {
         fi
         print_success "Published $crate v$version"
 
-        # Give crates.io index time to update before publishing dependents
-        if [ "$crate" = "stash
-        -lib" ]; then
+        # Give crates.io index time to update before publishing the CLI (which depends on the lib)
+        if [ "$crate" = "secretstash" ]; then
             print_info "Waiting 30s for crates.io index to update..."
             sleep 30
         fi
@@ -382,13 +363,12 @@ main() {
         fi
 
         print_info "Committing version change..."
-        git add Cargo.toml
-        git commit -m "Bump version to $new_version"
+        jj commit -m "Bump versions to $new_version"
         print_success "Version commit created"
         echo ""
 
         print_info "Pushing commits to remote..."
-        git push origin HEAD:main
+        jj git push --bookmark main
         print_success "Commits pushed to remote"
         echo ""
 
