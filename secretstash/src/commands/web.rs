@@ -24,7 +24,7 @@ pub fn web(
 
     let item = db
         .get_item(shortname)?
-        .ok_or_else(|| anyhow!("Item '{}' not found", shortname))?;
+        .ok_or_else(|| anyhow!("Item '{shortname}' not found"))?;
 
     if item.item_type != "url" {
         return Err(anyhow!(
@@ -47,7 +47,7 @@ pub fn web(
         (Some(b), true) => open_private_with(b, &url),
         (None, false) => {
             open::that(&url)?;
-            println!("Opened '{}' in browser.", shortname);
+            println!("Opened '{shortname}' in browser.");
             Ok(())
         }
         (None, true) => open_private_discover(&url),
@@ -59,7 +59,7 @@ fn open_with(browser: &str, url: &str) -> Result<()> {
         .arg(url)
         .spawn()
         .map_err(|e| browser_err(browser, e))?;
-    println!("Opened in {}.", browser);
+    println!("Opened in {browser}.");
     Ok(())
 }
 
@@ -70,10 +70,9 @@ fn open_private_with(browser: &str, url: &str) -> Result<()> {
         .map(|(_, flag)| *flag)
         .ok_or_else(|| {
             anyhow!(
-                "Unknown private-mode flag for '{}'. \
+                "Unknown private-mode flag for '{browser}'. \
                  Known browsers: firefox (--private-window), \
-                 google-chrome / chromium / brave-browser / vivaldi (--incognito).",
-                browser
+                 google-chrome / chromium / brave-browser / vivaldi (--incognito)."
             )
         })?;
 
@@ -82,7 +81,7 @@ fn open_private_with(browser: &str, url: &str) -> Result<()> {
         .arg(url)
         .spawn()
         .map_err(|e| browser_err(browser, e))?;
-    println!("Opened in {} (private mode).", browser);
+    println!("Opened in {browser} (private mode).");
     Ok(())
 }
 
@@ -94,10 +93,10 @@ fn open_private_discover(url: &str) -> Result<()> {
             .spawn()
         {
             Ok(_) => {
-                println!("Opened in {} (private mode).", browser);
+                println!("Opened in {browser} (private mode).");
                 return Ok(());
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(e.into()),
         }
     }
@@ -117,7 +116,7 @@ fn normalize_browser(browser: &str) -> &str {
 
 fn browser_err(browser: &str, e: std::io::Error) -> anyhow::Error {
     if e.kind() == std::io::ErrorKind::NotFound {
-        anyhow!("Browser '{}' not found", browser)
+        anyhow!("Browser '{browser}' not found")
     } else {
         e.into()
     }

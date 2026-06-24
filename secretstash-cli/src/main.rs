@@ -8,6 +8,7 @@ use clap_complete::generate;
 use cli::{AuthAction, Cli, Commands};
 use secretstash::{commands, config};
 
+#[allow(clippy::too_many_lines)]
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -80,7 +81,10 @@ fn main() -> Result<()> {
         Commands::Purge { force, shortname } => commands::purge::purge(&shortname, force, &db_path),
         Commands::List { tags, item_type } => commands::list::list(
             &tags,
-            item_type.as_ref().map(|t| t.to_string()).as_deref(),
+            item_type
+                .as_ref()
+                .map(std::string::ToString::to_string)
+                .as_deref(),
             &db_path,
         ),
         Commands::Tag { shortname, tags } => commands::tag::add_tags(&shortname, &tags, &db_path),
@@ -98,7 +102,10 @@ fn main() -> Result<()> {
             regex,
             include_history,
             &tags,
-            item_type.as_ref().map(|t| t.to_string()).as_deref(),
+            item_type
+                .as_ref()
+                .map(std::string::ToString::to_string)
+                .as_deref(),
             &db_path,
         ),
         Commands::Tags => commands::tags::tags(&db_path),

@@ -29,8 +29,7 @@ pub fn login(db_path: &std::path::Path, session_timeout_minutes: u64) -> Result<
         let pw = read_password_from_stdin()?;
         if is_new_vault && pw.len() < MIN_PASSWORD_LEN {
             return Err(anyhow!(
-                "Master password must be at least {} characters",
-                MIN_PASSWORD_LEN
+                "Master password must be at least {MIN_PASSWORD_LEN} characters"
             ));
         }
         pw
@@ -38,8 +37,7 @@ pub fn login(db_path: &std::path::Path, session_timeout_minutes: u64) -> Result<
         let pw = rpassword::prompt_password("Create master password: ")?;
         if pw.len() < MIN_PASSWORD_LEN {
             return Err(anyhow!(
-                "Master password must be at least {} characters",
-                MIN_PASSWORD_LEN
+                "Master password must be at least {MIN_PASSWORD_LEN} characters"
             ));
         }
         let confirm = rpassword::prompt_password("Confirm master password: ")?;
@@ -71,12 +69,9 @@ pub fn login(db_path: &std::path::Path, session_timeout_minutes: u64) -> Result<
     let used_keychain = session::save_key(&key, session_timeout_minutes)?;
     let storage = if used_keychain { " (keychain)" } else { "" };
     if session_timeout_minutes == 0 {
-        println!("Logged in. Session does not expire.{}", storage);
+        println!("Logged in. Session does not expire.{storage}");
     } else {
-        println!(
-            "Logged in. Session expires in {} minute(s).{}",
-            session_timeout_minutes, storage
-        );
+        println!("Logged in. Session expires in {session_timeout_minutes} minute(s).{storage}");
     }
     Ok(())
 }
@@ -84,7 +79,7 @@ pub fn login(db_path: &std::path::Path, session_timeout_minutes: u64) -> Result<
 pub fn status() -> Result<()> {
     match crate::session::get_status() {
         Err(e) => {
-            println!("{}", e);
+            println!("{e}");
         }
         Ok(info) => {
             println!("Logged in.");
@@ -108,7 +103,7 @@ pub fn status() -> Result<()> {
             } else {
                 "session file"
             };
-            println!("Stored in {}.", storage);
+            println!("Stored in {storage}.");
         }
     }
     Ok(())
@@ -120,14 +115,14 @@ fn format_remaining(secs: u64) -> String {
     }
     let mins = secs / 60;
     if mins < 60 {
-        return format!("Expires in {} minute(s).", mins);
+        return format!("Expires in {mins} minute(s).");
     }
     let hours = mins / 60;
     let mins_rem = mins % 60;
     if mins_rem == 0 {
-        format!("Expires in {} hour(s).", hours)
+        format!("Expires in {hours} hour(s).")
     } else {
-        format!("Expires in {} hour(s) {} minute(s).", hours, mins_rem)
+        format!("Expires in {hours} hour(s) {mins_rem} minute(s).")
     }
 }
 
@@ -152,8 +147,7 @@ pub fn reset(db_path: &std::path::Path) -> Result<()> {
     let new_password = rpassword::prompt_password("New master password: ")?;
     if new_password.len() < MIN_PASSWORD_LEN {
         return Err(anyhow!(
-            "Master password must be at least {} characters",
-            MIN_PASSWORD_LEN
+            "Master password must be at least {MIN_PASSWORD_LEN} characters"
         ));
     }
     let confirm = rpassword::prompt_password("Confirm new master password: ")?;

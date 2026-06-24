@@ -5,8 +5,8 @@ use zeroize::Zeroizing;
 
 use crate::{config, crypto};
 
-/// Migrate a vault from the old field-level-encrypted plain SQLite format to
-/// the new whole-database SQLCipher format.
+/// Migrate a vault from the old field-level-encrypted plain `SQLite` format to
+/// the new whole-database `SQLCipher` format.
 ///
 /// Uses the same master password and Argon2id key as the old vault, so the
 /// existing session (if any) continues to work after migration.
@@ -39,6 +39,7 @@ pub fn migrate(db_path: &std::path::Path) -> Result<()> {
 
 /// Inner migration logic, separated so tests can supply the password directly
 /// without needing a TTY.
+#[allow(clippy::too_many_lines, clippy::items_after_statements)]
 pub(crate) fn migrate_with_password(db_path: &std::path::Path, password: &str) -> Result<()> {
     let salt_path = config::salt_path_for_db(db_path);
 

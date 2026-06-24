@@ -49,7 +49,7 @@ fn hex_key(key: &[u8; 32]) -> Zeroizing<String> {
 impl Db {
     /// Open (or create) a SQLCipher-encrypted database at `path` using `key`.
     /// Returns an error if the file exists but the key is wrong, with a hint
-    /// to run `stash migrate` when the file looks like a plain SQLite DB.
+    /// to run `stash migrate` when the file looks like a plain `SQLite` DB.
     pub fn open(path: &Path, key: &[u8; 32]) -> Result<Self> {
         // Create the DB file with 0600 up front so SQLite never materialises a
         // fresh vault with the process umask (typically world-readable).
@@ -117,7 +117,7 @@ impl Db {
             .conn
             .prepare("PRAGMA table_info(items)")?
             .query_map([], |row| row.get::<_, String>(1))?
-            .filter_map(|r| r.ok())
+            .filter_map(std::result::Result::ok)
             .collect();
 
         if !columns.iter().any(|c| c == "browser") {
@@ -137,7 +137,7 @@ impl Db {
             .conn
             .prepare("PRAGMA table_info(history)")?
             .query_map([], |row| row.get::<_, String>(1))?
-            .filter_map(|r| r.ok())
+            .filter_map(std::result::Result::ok)
             .collect();
         if !history_cols.iter().any(|c| c == "title") {
             self.conn
@@ -147,7 +147,7 @@ impl Db {
         Ok(())
     }
 
-    /// Change the SQLCipher encryption key (used by `stash auth reset`).
+    /// Change the `SQLCipher` encryption key (used by `stash auth reset`).
     pub fn rekey(&self, new_key: &[u8; 32]) -> Result<()> {
         let rekey_pragma = Zeroizing::new(format!(
             "PRAGMA rekey = \"x'{}'\"",
@@ -256,7 +256,7 @@ impl Db {
             .conn
             .execute("DELETE FROM items WHERE shortname=?1", params![shortname])?;
         if n == 0 {
-            return Err(anyhow!("Item '{}' not found", shortname));
+            return Err(anyhow!("Item '{shortname}' not found"));
         }
         Ok(())
     }
@@ -331,7 +331,7 @@ impl Db {
             params![new, old],
         )?;
         if n == 0 {
-            return Err(anyhow!("Item '{}' not found", old));
+            return Err(anyhow!("Item '{old}' not found"));
         }
         Ok(())
     }
@@ -382,7 +382,7 @@ impl Db {
             params![browser, shortname],
         )?;
         if n == 0 {
-            return Err(anyhow!("Item '{}' not found", shortname));
+            return Err(anyhow!("Item '{shortname}' not found"));
         }
         Ok(())
     }
@@ -393,7 +393,7 @@ impl Db {
             params![private, shortname],
         )?;
         if n == 0 {
-            return Err(anyhow!("Item '{}' not found", shortname));
+            return Err(anyhow!("Item '{shortname}' not found"));
         }
         Ok(())
     }
@@ -435,7 +435,7 @@ impl Db {
             params![new_content, new_title, now, shortname],
         )?;
         if n == 0 {
-            return Err(anyhow!("Item '{}' not found", shortname));
+            return Err(anyhow!("Item '{shortname}' not found"));
         }
 
         tx.commit()?;

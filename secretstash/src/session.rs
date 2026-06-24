@@ -61,7 +61,7 @@ fn refresh_session(key: &[u8; 32], timeout_minutes: u64) -> Result<()> {
     }
     let expiry = now_secs() + timeout_minutes * 60;
     let content = encode_session(expiry, timeout_minutes, key);
-    crate::keychain::save(&content);
+    let _ = crate::keychain::save(&content);
     let path = crate::config::session_path()?;
     write_session_file(&path, content.as_bytes())
 }
@@ -193,6 +193,7 @@ fn parse_session(content: &str) -> Result<(Zeroizing<[u8; 32]>, u64)> {
 mod tests {
     use super::*;
 
+    #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
     fn make_session(expiry_offset_secs: i64, timeout_minutes: u64, key: &[u8; 32]) -> String {
         let expiry = (now_secs() as i64 + expiry_offset_secs) as u64;
         format!("{}\n{}\n{}", expiry, timeout_minutes, B64.encode(key))
@@ -225,14 +226,14 @@ mod tests {
     #[test]
     fn missing_key_line_rejected() {
         let expiry = now_secs() + 900;
-        let err = parse_session(&format!("{}\n15", expiry)).unwrap_err();
+        let err = parse_session(&format!("{expiry}\n15")).unwrap_err();
         assert!(err.to_string().to_lowercase().contains("corrupt"));
     }
 
     #[test]
     fn bad_base64_rejected() {
         let expiry = now_secs() + 900;
-        let content = format!("{}\n15\nnot!base64!!!", expiry);
+        let content = format!("{expiry}\n15\nnot!base64!!!");
         assert!(parse_session(&content).is_err());
     }
 

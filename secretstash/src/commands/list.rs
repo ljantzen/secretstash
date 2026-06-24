@@ -44,7 +44,7 @@ pub fn list(
             "No items tagged with: {}.",
             tag_filters
                 .iter()
-                .map(|t| format!("\"{}\"", t))
+                .map(|t| format!("\"{t}\""))
                 .collect::<Vec<_>>()
                 .join(", ")
         );
@@ -60,7 +60,7 @@ pub fn list(
     let type_w = "note".len();
     let title_w = rows
         .iter()
-        .filter_map(|(_, _, t, _)| t.as_deref().map(|s| s.len()))
+        .filter_map(|(_, _, t, _)| t.as_deref().map(str::len))
         .max()
         .unwrap_or(0)
         .max("TITLE".len());

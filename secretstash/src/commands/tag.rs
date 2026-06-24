@@ -8,7 +8,7 @@ pub fn add_tags(shortname: &str, new_tags: &[String], db_path: &std::path::Path)
 
     let item = db
         .get_item(shortname)?
-        .ok_or_else(|| anyhow!("Item '{}' not found", shortname))?;
+        .ok_or_else(|| anyhow!("Item '{shortname}' not found"))?;
 
     let existing: Vec<String> = db.get_tags(item.id)?.into_iter().map(|t| t.tag).collect();
 
@@ -23,11 +23,8 @@ pub fn add_tags(shortname: &str, new_tags: &[String], db_path: &std::path::Path)
     }
 
     match added {
-        0 => println!(
-            "No new tags added (all already present on '{}').",
-            shortname
-        ),
-        n => println!("Added {} tag(s) to '{}'.", n, shortname),
+        0 => println!("No new tags added (all already present on '{shortname}')."),
+        n => println!("Added {n} tag(s) to '{shortname}'."),
     }
     Ok(())
 }
@@ -38,7 +35,7 @@ pub fn remove_tags(shortname: &str, remove: &[String], db_path: &std::path::Path
 
     let item = db
         .get_item(shortname)?
-        .ok_or_else(|| anyhow!("Item '{}' not found", shortname))?;
+        .ok_or_else(|| anyhow!("Item '{shortname}' not found"))?;
 
     let raw_tags = db.get_tags(item.id)?;
     let mut removed = 0;
@@ -54,8 +51,8 @@ pub fn remove_tags(shortname: &str, remove: &[String], db_path: &std::path::Path
     }
 
     match removed {
-        0 => println!("No matching tags found on '{}'.", shortname),
-        n => println!("Removed {} tag(s) from '{}'.", n, shortname),
+        0 => println!("No matching tags found on '{shortname}'."),
+        n => println!("Removed {n} tag(s) from '{shortname}'."),
     }
     Ok(())
 }

@@ -32,11 +32,9 @@ impl Backend {
 
     fn copy_args(self) -> &'static [&'static str] {
         match self {
-            Backend::Pbcopy => &[],
-            Backend::WlCopy => &[],
+            Backend::Pbcopy | Backend::WlCopy | Backend::ClipExe => &[],
             Backend::Xclip => &["-selection", "clipboard"],
             Backend::Xsel => &["--clipboard", "--input"],
-            Backend::ClipExe => &[],
         }
     }
 
@@ -71,7 +69,8 @@ impl Clipboard {
                     child.wait()?;
                     return Ok(Clipboard(backend));
                 }
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+
                 Err(e) => return Err(e.into()),
             }
         }
@@ -102,7 +101,7 @@ impl Clipboard {
 
         #[cfg(not(windows))]
         let _ = Command::new("sh")
-            .args(["-c", &format!("sleep {}; {}", after_secs, fragment)])
+            .args(["-c", &format!("sleep {after_secs}; {fragment}")])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())

@@ -7,10 +7,10 @@ pub fn rename(old: &str, new: &str, db_path: &std::path::Path) -> Result<()> {
     let db = Db::open(db_path, &key)?;
 
     if db.get_item(new)?.is_some() {
-        return Err(anyhow!("Item '{}' already exists", new));
+        return Err(anyhow!("Item '{new}' already exists"));
     }
 
     db.rename_item(old, new)?;
-    println!("Renamed '{}' to '{}'.", old, new);
+    println!("Renamed '{old}' to '{new}'.");
     Ok(())
 }

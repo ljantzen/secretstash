@@ -9,15 +9,15 @@ pub fn restore(shortname: &str, version: Option<i64>, db_path: &std::path::Path)
 
     let item = db
         .get_item(shortname)?
-        .ok_or_else(|| anyhow!("Item '{}' not found", shortname))?;
+        .ok_or_else(|| anyhow!("Item '{shortname}' not found"))?;
 
     let entry = match version {
         Some(v) => db
             .get_history_version(item.id, v)?
-            .ok_or_else(|| anyhow!("Version {} not found for '{}'", v, shortname))?,
+            .ok_or_else(|| anyhow!("Version {v} not found for '{shortname}'"))?,
         None => db
             .get_latest_history(item.id)?
-            .ok_or_else(|| anyhow!("No history to restore for '{}'", shortname))?,
+            .ok_or_else(|| anyhow!("No history to restore for '{shortname}'"))?,
     };
 
     db.replace_content(

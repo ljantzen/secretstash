@@ -174,7 +174,7 @@ pub enum Commands {
         include_history: bool,
     },
     /// Migrate an existing vault from the old field-level-encrypted format
-    /// to whole-database SQLCipher encryption
+    /// to whole-database `SQLCipher` encryption
     Migrate,
     /// Print a shell completion script to stdout
     Completions {

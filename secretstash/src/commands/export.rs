@@ -85,17 +85,14 @@ pub fn export(include_history: bool, output: Option<&Path>, db_path: &Path) -> R
 
     let json = serde_json::to_string_pretty(&file)?;
 
-    match output {
-        Some(path) => {
-            std::fs::write(path, &json)?;
-            eprintln!("Exported to {}", path.display());
-        }
-        None => {
-            let stdout = io::stdout();
-            let mut out = stdout.lock();
-            out.write_all(json.as_bytes())?;
-            out.write_all(b"\n")?;
-        }
+    if let Some(path) = output {
+        std::fs::write(path, &json)?;
+        eprintln!("Exported to {}", path.display());
+    } else {
+        let stdout = io::stdout();
+        let mut out = stdout.lock();
+        out.write_all(json.as_bytes())?;
+        out.write_all(b"\n")?;
     }
 
     Ok(())

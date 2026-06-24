@@ -8,6 +8,7 @@ use chacha20poly1305::{
 use rand_core::{OsRng, TryRngCore};
 use zeroize::Zeroizing;
 
+#[must_use]
 pub fn generate_salt() -> String {
     let mut salt = [0u8; 32];
     OsRng.try_fill_bytes(&mut salt).expect("OS RNG failed");

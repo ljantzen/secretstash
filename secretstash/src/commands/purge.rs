@@ -8,11 +8,11 @@ pub fn purge(shortname: &str, force: bool, db_path: &std::path::Path) -> Result<
     let db = Db::open(db_path, &key)?;
 
     if !db.item_exists(shortname)? {
-        return Err(anyhow!("Item '{}' not found", shortname));
+        return Err(anyhow!("Item '{shortname}' not found"));
     }
 
     if !force {
-        print!("Delete '{}' and all its history? [y/N] ", shortname);
+        print!("Delete '{shortname}' and all its history? [y/N] ");
         io::stdout().flush()?;
 
         let mut line = String::new();
@@ -25,6 +25,6 @@ pub fn purge(shortname: &str, force: bool, db_path: &std::path::Path) -> Result<
     }
 
     db.delete_item(shortname)?;
-    println!("Purged '{}'.", shortname);
+    println!("Purged '{shortname}'.");
     Ok(())
 }

@@ -41,13 +41,12 @@ struct ImportHistoryEntry {
 }
 
 pub fn import(overwrite: bool, file: Option<&Path>, db_path: &Path) -> Result<()> {
-    let json = match file {
-        Some(path) => std::fs::read_to_string(path)?,
-        None => {
-            let mut buf = String::new();
-            io::stdin().read_to_string(&mut buf)?;
-            buf
-        }
+    let json = if let Some(path) = file {
+        std::fs::read_to_string(path)?
+    } else {
+        let mut buf = String::new();
+        io::stdin().read_to_string(&mut buf)?;
+        buf
     };
 
     let key = session::load_key()?;
@@ -55,18 +54,12 @@ pub fn import(overwrite: bool, file: Option<&Path>, db_path: &Path) -> Result<()
 
     let (imported, skipped, failed) = load_from_str(&db, &json, overwrite)?;
 
-    println!("Imported {} item(s).", imported);
+    println!("Imported {imported} item(s).");
     if skipped > 0 {
-        println!(
-            "Skipped {} item(s) that already exist. Use --overwrite to replace them.",
-            skipped
-        );
+        println!("Skipped {skipped} item(s) that already exist. Use --overwrite to replace them.");
     }
     if failed > 0 {
-        println!(
-            "{} item(s) could not be imported (see warnings above).",
-            failed
-        );
+        println!("{failed} item(s) could not be imported (see warnings above).");
     }
 
     Ok(())
@@ -74,7 +67,7 @@ pub fn import(overwrite: bool, file: Option<&Path>, db_path: &Path) -> Result<()
 
 fn load_from_str(db: &Db, json: &str, overwrite: bool) -> Result<(usize, usize, usize)> {
     let import_file: ImportFile =
-        serde_json::from_str(json).map_err(|e| anyhow!("Invalid export file: {}", e))?;
+        serde_json::from_str(json).map_err(|e| anyhow!("Invalid export file: {e}"))?;
 
     if import_file.version != 1 {
         eprintln!(

@@ -153,6 +153,9 @@ stash list --type url
 stash tag todo urgent
 stash untag todo personal
 
+# List all tags in the vault with item counts
+stash tags
+
 # Search item content and titles (case-insensitive substring)
 stash search "github"
 
@@ -166,8 +169,9 @@ stash search --regex '(?i)github'
 stash search --include-history "old value"
 stash search --regex --include-history '(?i)todo'
 
-# Filter by tag (no pattern required)
+# Filter by tag (repeatable; OR logic — shows items with any matching tag)
 stash search --tag work
+stash search --tag work --tag personal
 
 # Filter by type
 stash search --type url
@@ -392,10 +396,24 @@ Adds one or more tags to an existing item. Duplicate tags are silently ignored.
 Removes one or more tags from an existing item. Tags not present on the item are
 silently ignored.
 
+### `stash tags`
+
+Lists every tag in the vault, sorted alphabetically, with a count of how many
+items carry each tag:
+
+```
+TAG        ITEMS
+──────────────────
+personal   3
+work       5
+
+2 tag(s).
+```
+
 ### `stash search`
 
 ```
-stash search [PATTERN] [--regex] [--include-history] [--tag <TAG>] [--type <TYPE>]
+stash search [PATTERN] [--regex] [--include-history] [--tag <TAG>]... [--type <TYPE>]
 ```
 
 Searches items by content, title, tag, and/or type. At least one of `PATTERN`,
@@ -406,7 +424,7 @@ Searches items by content, title, tag, and/or type. At least one of `PATTERN`,
 | `PATTERN` | Text or regex to match against content and titles |
 | `-r`, `--regex` | Treat `PATTERN` as a regular expression |
 | `-H`, `--include-history` | Also search archived versions (shown as `name:vN`) |
-| `-g`, `--tag <TAG>` | Restrict results to items that have this tag |
+| `-g`, `--tag <TAG>` | Restrict to items with this tag (repeatable; OR logic) |
 | `-t`, `--type <TYPE>` | Restrict results to `url` or `note` |
 
 Without `--regex`, matching is a case-insensitive substring search. With
@@ -418,6 +436,7 @@ stash search "api key"
 stash search --regex '\d{4}-\d{2}-\d{2}'
 stash search --regex '(?i)secret'
 stash search --tag work
+stash search --tag work --tag personal
 stash search --type url "github"
 stash search --include-history "old password"
 stash search --regex --include-history '(?i)todo'

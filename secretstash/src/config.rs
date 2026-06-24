@@ -24,6 +24,7 @@ pub fn db_path() -> Result<PathBuf> {
 
 /// Returns the salt file path that corresponds to a given database path.
 /// The salt file sits alongside the database with a `.salt` extension.
+#[must_use]
 pub fn salt_path_for_db(db_path: &Path) -> PathBuf {
     db_path.with_extension("salt")
 }
@@ -40,7 +41,7 @@ pub fn config_path() -> Result<PathBuf> {
 }
 
 /// Write the Argon2id salt to a file with mode 0600 on Unix.
-/// The file is atomically replaced (remove + create_new) to avoid
+/// The file is atomically replaced (remove + `create_new`) to avoid
 /// a window where it exists with permissive permissions.
 #[cfg(unix)]
 pub fn write_salt_file(path: &Path, salt: &str) -> Result<()> {
@@ -55,7 +56,7 @@ pub fn write_salt_file(path: &Path, salt: &str) -> Result<()> {
         .create_new(true)
         .mode(0o600)
         .open(path)?;
-    writeln!(f, "{}", salt)?;
+    writeln!(f, "{salt}")?;
     Ok(())
 }
 
@@ -67,7 +68,7 @@ pub fn write_salt_file(path: &Path, salt: &str) -> Result<()> {
 
 /// Pre-create `path` as an empty file with mode 0600 if it does not yet exist,
 /// so that a program which would otherwise create it world-readable (e.g.
-/// SQLite creating a fresh database) never gets the chance. No-op on non-Unix
+/// `SQLite` creating a fresh database) never gets the chance. No-op on non-Unix
 /// and when the file already exists. Best effort: errors are ignored.
 #[cfg(unix)]
 pub fn precreate_private(path: &Path) {
@@ -86,7 +87,7 @@ pub fn precreate_private(path: &Path) {
 pub fn precreate_private(_path: &Path) {}
 
 /// Tighten permissions to 0600 on a database file and its WAL/SHM sidecars,
-/// which SQLite may create with the process umask. Best effort: missing files
+/// which `SQLite` may create with the process umask. Best effort: missing files
 /// and errors are ignored. No-op on non-Unix.
 #[cfg(unix)]
 pub fn restrict_db_permissions(path: &Path) {

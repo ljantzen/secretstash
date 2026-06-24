@@ -8,10 +8,10 @@ pub fn copy(source: &str, dest: &str, db_path: &std::path::Path) -> Result<()> {
 
     let item = db
         .get_item(source)?
-        .ok_or_else(|| anyhow!("Item '{}' not found", source))?;
+        .ok_or_else(|| anyhow!("Item '{source}' not found"))?;
 
     if db.item_exists(dest)? {
-        return Err(anyhow!("Item '{}' already exists", dest));
+        return Err(anyhow!("Item '{dest}' already exists"));
     }
 
     let new_id = db.insert_item(
@@ -26,6 +26,6 @@ pub fn copy(source: &str, dest: &str, db_path: &std::path::Path) -> Result<()> {
         db.add_tag(new_id, &tag.tag)?;
     }
 
-    println!("Copied '{}' to '{}'.", source, dest);
+    println!("Copied '{source}' to '{dest}'.");
     Ok(())
 }

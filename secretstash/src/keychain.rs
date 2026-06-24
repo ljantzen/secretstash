@@ -4,12 +4,14 @@ const SERVICE: &str = "stash";
 const ACCOUNT: &str = "session";
 
 /// Save `content` to the system keychain. Returns true if saved successfully.
+#[must_use]
 pub fn save(content: &str) -> bool {
     platform::save(content)
 }
 
 /// Load session content from the system keychain.
 /// Returns None when the entry is absent or the backend is unavailable.
+#[must_use]
 pub fn load() -> Option<Zeroizing<String>> {
     platform::load()
 }
@@ -79,7 +81,7 @@ mod platform {
             .take()
             .and_then(|mut s| s.write_all(content.as_bytes()).ok())
             .is_some();
-        wrote && child.wait().map(|s| s.success()).unwrap_or(false)
+        wrote && child.wait().is_ok_and(|s| s.success())
     }
 
     pub fn load() -> Option<Zeroizing<String>> {

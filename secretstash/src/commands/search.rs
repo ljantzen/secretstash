@@ -92,7 +92,7 @@ pub fn search(
 
     let label_w = results.iter().map(|(l, _, _)| l.len()).max().unwrap_or(4);
     for (label, item_type, snip) in &results {
-        println!("{:<label_w$}  [{:<6}]  {}", label, item_type, snip);
+        println!("{label:<label_w$}  [{item_type:<6}]  {snip}");
     }
 
     println!();

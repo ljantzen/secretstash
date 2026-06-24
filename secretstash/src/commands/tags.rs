@@ -22,7 +22,7 @@ pub fn tags(db_path: &std::path::Path) -> Result<()> {
     println!("{:<tag_w$}  ITEMS", "TAG");
     println!("{}", "─".repeat(tag_w + 2 + 5));
     for (tag, count) in &all_tags {
-        println!("{:<tag_w$}  {}", tag, count);
+        println!("{tag:<tag_w$}  {count}");
     }
     println!();
     println!("{} tag(s).", all_tags.len());

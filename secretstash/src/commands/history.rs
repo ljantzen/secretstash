@@ -9,7 +9,7 @@ pub fn history(shortname: &str, db_path: &std::path::Path) -> Result<()> {
 
     let item = db
         .get_item(shortname)?
-        .ok_or_else(|| anyhow!("Item '{}' not found", shortname))?;
+        .ok_or_else(|| anyhow!("Item '{shortname}' not found"))?;
 
     let entries = db.get_history(item.id)?;
 
@@ -19,7 +19,7 @@ pub fn history(shortname: &str, db_path: &std::path::Path) -> Result<()> {
         println!();
         println!("─── v{} ({}) ───", entry.version, fmt_ts(&entry.created_at));
         if let Some(t) = &entry.title {
-            println!("title: {}", t);
+            println!("title: {t}");
         }
         println!("{}", entry.content.trim_end());
     }
@@ -27,7 +27,7 @@ pub fn history(shortname: &str, db_path: &std::path::Path) -> Result<()> {
     println!();
     println!("─── current ({}) ───", fmt_ts(&item.updated_at));
     if let Some(t) = &item.title {
-        println!("title: {}", t);
+        println!("title: {t}");
     }
     println!("{}", item.content.trim_end());
     Ok(())

@@ -27,9 +27,7 @@ pub fn add(
 
     if db.item_exists(shortname)? {
         return Err(anyhow!(
-            "Item '{}' already exists. Use 'stash edit {}' to update it.",
-            shortname,
-            shortname
+            "Item '{shortname}' already exists. Use 'stash edit {shortname}' to update it."
         ));
     }
 
@@ -62,7 +60,7 @@ pub fn add(
         db.add_tag(item_id, tag)?;
     }
 
-    println!("Added '{}' ({}).", shortname, item_type);
+    println!("Added '{shortname}' ({item_type}).");
     Ok(())
 }
 
@@ -75,7 +73,7 @@ pub fn open_in_editor(initial: &str) -> Result<String> {
     let status = std::process::Command::new(&editor)
         .arg(tmp.path())
         .status()
-        .map_err(|e| anyhow!("Failed to launch '{}': {}", editor, e))?;
+        .map_err(|e| anyhow!("Failed to launch '{editor}': {e}"))?;
 
     if !status.success() {
         return Err(anyhow!("Editor exited with non-zero status"));

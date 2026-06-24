@@ -9,7 +9,7 @@ pub fn edit(shortname: &str, new_title: Option<&str>, db_path: &std::path::Path)
 
     let item = db
         .get_item(shortname)?
-        .ok_or_else(|| anyhow!("Item '{}' not found", shortname))?;
+        .ok_or_else(|| anyhow!("Item '{shortname}' not found"))?;
 
     if let Some(t) = new_title {
         // Title-only update — no editor
@@ -25,7 +25,7 @@ pub fn edit(shortname: &str, new_title: Option<&str>, db_path: &std::path::Path)
             &item.content,
             Some(t),
         )?;
-        println!("Updated title for '{}'.", shortname);
+        println!("Updated title for '{shortname}'.");
         return Ok(());
     }
 
@@ -50,6 +50,6 @@ pub fn edit(shortname: &str, new_title: Option<&str>, db_path: &std::path::Path)
         item.title.as_deref(),
     )?;
 
-    println!("Updated '{}'.", shortname);
+    println!("Updated '{shortname}'.");
     Ok(())
 }

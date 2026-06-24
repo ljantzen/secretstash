@@ -14,17 +14,14 @@ pub fn show(
 
     let item = db
         .get_item(shortname)?
-        .ok_or_else(|| anyhow!("Item '{}' not found", shortname))?;
+        .ok_or_else(|| anyhow!("Item '{shortname}' not found"))?;
 
     if copy {
         let cb = Clipboard::copy(item.content.trim_end())?;
-        println!("Copied '{}' to clipboard.", shortname);
+        println!("Copied '{shortname}' to clipboard.");
         if clear_after_secs > 0 {
             cb.schedule_clear(clear_after_secs);
-            println!(
-                "Clipboard will be cleared in {} second(s).",
-                clear_after_secs
-            );
+            println!("Clipboard will be cleared in {clear_after_secs} second(s).");
         }
         return Ok(());
     }
@@ -36,10 +33,10 @@ pub fn show(
         println!("shortname : {}", item.shortname);
         println!("type      : {}", item.item_type);
         if let Some(t) = &item.title {
-            println!("title     : {}", t);
+            println!("title     : {t}");
         }
         if let Some(b) = &item.browser {
-            println!("browser   : {}", b);
+            println!("browser   : {b}");
         }
         if item.private == Some(true) {
             println!("private   : yes");
@@ -51,7 +48,7 @@ pub fn show(
         println!("updated   : {}", fmt_ts(&item.updated_at));
         println!();
     } else if let Some(t) = &item.title {
-        println!("{}", t);
+        println!("{t}");
     }
     println!("{}", item.content.trim_end());
     if !verbose && !tags.is_empty() {
@@ -61,8 +58,10 @@ pub fn show(
     Ok(())
 }
 
+#[must_use]
 pub fn fmt_ts(ts: &str) -> String {
-    chrono::DateTime::parse_from_rfc3339(ts)
-        .map(|dt| dt.format("%Y-%m-%d %H:%M UTC").to_string())
-        .unwrap_or_else(|_| ts.to_string())
+    chrono::DateTime::parse_from_rfc3339(ts).map_or_else(
+        |_| ts.to_string(),
+        |dt| dt.format("%Y-%m-%d %H:%M UTC").to_string(),
+    )
 }

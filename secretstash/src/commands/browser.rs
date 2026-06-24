@@ -23,7 +23,7 @@ pub fn set_browser(
 
     let item = db
         .get_item(shortname)?
-        .ok_or_else(|| anyhow!("Item '{}' not found", shortname))?;
+        .ok_or_else(|| anyhow!("Item '{shortname}' not found"))?;
 
     if item.item_type != "url" {
         return Err(anyhow!(
@@ -36,7 +36,7 @@ pub fn set_browser(
     if browser.is_some() || clear {
         db.set_browser(shortname, browser)?;
         if clear {
-            println!("Cleared browser preference for '{}'.", shortname);
+            println!("Cleared browser preference for '{shortname}'.");
         } else {
             println!("Set browser for '{}' to '{}'.", shortname, browser.unwrap());
         }
@@ -45,9 +45,9 @@ pub fn set_browser(
     if let Some(p) = private {
         db.set_private(shortname, if p { Some(true) } else { None })?;
         if p {
-            println!("Set '{}' to always open in private mode.", shortname);
+            println!("Set '{shortname}' to always open in private mode.");
         } else {
-            println!("Cleared private-mode preference for '{}'.", shortname);
+            println!("Cleared private-mode preference for '{shortname}'.");
         }
     }
 
