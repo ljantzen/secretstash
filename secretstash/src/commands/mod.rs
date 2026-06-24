@@ -14,4 +14,5 @@ pub mod restore;
 pub mod search;
 pub mod show;
 pub mod tag;
+pub mod tags;
 pub mod web;

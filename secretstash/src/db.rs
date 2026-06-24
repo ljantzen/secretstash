@@ -290,6 +290,18 @@ impl Db {
         Ok(())
     }
 
+    pub fn list_all_tags(&self) -> Result<Vec<(String, i64)>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT tag, COUNT(*) FROM item_tags GROUP BY tag ORDER BY tag ASC")?;
+        let tags = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(tags)
+    }
+
     pub fn list_items(&self) -> Result<Vec<Item>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, shortname, item_type, content, created_at, updated_at, browser, private, title
@@ -720,6 +732,26 @@ mod tests {
         db.add_tag(id, "b").unwrap();
         db.delete_item("k").unwrap();
         assert!(db.get_tags(id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn list_all_tags_with_counts() {
+        let db = Db::open_in_memory().unwrap();
+        let id1 = db.insert_item("a", "note", "x", None, None).unwrap();
+        let id2 = db.insert_item("b", "note", "y", None, None).unwrap();
+        db.add_tag(id1, "work").unwrap();
+        db.add_tag(id1, "personal").unwrap();
+        db.add_tag(id2, "work").unwrap();
+        let tags = db.list_all_tags().unwrap();
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags[0], ("personal".to_string(), 1));
+        assert_eq!(tags[1], ("work".to_string(), 2));
+    }
+
+    #[test]
+    fn list_all_tags_empty() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(db.list_all_tags().unwrap().is_empty());
     }
 
     #[test]

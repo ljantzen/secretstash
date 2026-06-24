@@ -7,11 +7,11 @@ pub fn search(
     pattern: Option<&str>,
     use_regex: bool,
     include_history: bool,
-    tag_filter: Option<&str>,
+    tag_filters: &[String],
     type_filter: Option<&str>,
     db_path: &std::path::Path,
 ) -> Result<()> {
-    if pattern.is_none() && tag_filter.is_none() && type_filter.is_none() {
+    if pattern.is_none() && tag_filters.is_empty() && type_filter.is_none() {
         return Err(anyhow!(
             "Provide a search pattern, --tag <TAG>, --type <TYPE>, or a combination."
         ));
@@ -21,7 +21,7 @@ pub fn search(
     }
 
     let matcher = pattern.map(|p| Matcher::build(p, use_regex)).transpose()?;
-    let tag_lc = tag_filter.map(|t| t.to_lowercase());
+    let tags_lc: Vec<String> = tag_filters.iter().map(|t| t.to_lowercase()).collect();
 
     let key = session::load_key()?;
     let db = Db::open(db_path, &key)?;
@@ -42,9 +42,11 @@ pub fn search(
             continue;
         }
 
-        if let Some(ref tf) = tag_lc {
-            let tags = db.get_tags(item.id)?;
-            if !tags.iter().any(|t| t.tag.to_lowercase() == *tf) {
+        if !tags_lc.is_empty() {
+            let item_tags = db.get_tags(item.id)?;
+            let item_tags_lc: Vec<String> =
+                item_tags.iter().map(|t| t.tag.to_lowercase()).collect();
+            if !tags_lc.iter().any(|f| item_tags_lc.contains(f)) {
                 continue;
             }
         }

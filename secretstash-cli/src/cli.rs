@@ -121,13 +121,15 @@ pub enum Commands {
         /// Also search archived versions (shown as name:vN)
         #[arg(short = 'H', long)]
         include_history: bool,
-        /// Filter by tag
+        /// Filter by tag (repeatable; matches items with ANY of the given tags)
         #[arg(short = 'g', long = "tag", value_name = "TAG")]
-        tag: Option<String>,
+        tags: Vec<String>,
         /// Filter by item type
         #[arg(short = 't', long = "type", value_name = "TYPE")]
         item_type: Option<ItemType>,
     },
+    /// List all tags used in the vault with item counts
+    Tags,
     /// Rename an item
     Rename { shortname: String, new_name: String },
     /// Restore an item to a previous version
@@ -519,9 +521,9 @@ mod tests {
     #[test]
     fn search_pattern_only() {
         let cli = parse(&["stash", "search", "search term"]).unwrap();
-        if let Commands::Search { pattern, tag, .. } = cli.command {
+        if let Commands::Search { pattern, tags, .. } = cli.command {
             assert_eq!(pattern.as_deref(), Some("search term"));
-            assert!(tag.is_none());
+            assert!(tags.is_empty());
         } else {
             panic!("wrong variant");
         }
@@ -530,9 +532,20 @@ mod tests {
     #[test]
     fn search_tag_only() {
         let cli = parse(&["stash", "search", "--tag", "work"]).unwrap();
-        if let Commands::Search { pattern, tag, .. } = cli.command {
+        if let Commands::Search { pattern, tags, .. } = cli.command {
             assert!(pattern.is_none());
-            assert_eq!(tag.as_deref(), Some("work"));
+            assert_eq!(tags, ["work"]);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn search_multiple_tags() {
+        let cli = parse(&["stash", "search", "--tag", "work", "--tag", "personal"]).unwrap();
+        if let Commands::Search { pattern, tags, .. } = cli.command {
+            assert!(pattern.is_none());
+            assert_eq!(tags, ["work", "personal"]);
         } else {
             panic!("wrong variant");
         }
@@ -541,9 +554,9 @@ mod tests {
     #[test]
     fn search_pattern_and_tag() {
         let cli = parse(&["stash", "search", "--tag", "work", "term"]).unwrap();
-        if let Commands::Search { pattern, tag, .. } = cli.command {
+        if let Commands::Search { pattern, tags, .. } = cli.command {
             assert_eq!(pattern.as_deref(), Some("term"));
-            assert_eq!(tag.as_deref(), Some("work"));
+            assert_eq!(tags, ["work"]);
         } else {
             panic!("wrong variant");
         }
@@ -571,6 +584,12 @@ mod tests {
         } else {
             panic!("wrong variant");
         }
+    }
+
+    #[test]
+    fn parse_tags() {
+        let cli = parse(&["stash", "tags"]).unwrap();
+        assert!(matches!(cli.command, Commands::Tags));
     }
 
     // ── --db global flag ─────────────────────────────────────────────────
