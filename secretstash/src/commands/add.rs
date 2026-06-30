@@ -55,7 +55,16 @@ pub fn add(
         return Err(anyhow!("Content cannot be empty"));
     }
 
-    let item_id = db.insert_item(shortname, item_type, &content, title, browser)?;
+    let resolved_browser = browser
+        .map(crate::commands::web::resolve_browser)
+        .transpose()?;
+    let item_id = db.insert_item(
+        shortname,
+        item_type,
+        &content,
+        title,
+        resolved_browser.as_deref(),
+    )?;
 
     if let Some(p) = private {
         db.set_private(shortname, if p { Some(true) } else { None })?;

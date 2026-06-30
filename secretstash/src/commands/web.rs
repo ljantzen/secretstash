@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use std::collections::HashMap;
 
 use crate::{db::Db, session};
 
@@ -12,11 +13,51 @@ const PRIVATE_FLAGS: &[(&str, &str)] = &[
     ("vivaldi-stable", "--incognito"),
 ];
 
+/// Canonical browser names used for prefix resolution.
+/// Includes aliases (`chrome`) so they participate in prefix matching.
+const KNOWN_BROWSERS: &[&str] = &[
+    "firefox",
+    "google-chrome",
+    "chrome",
+    "chromium",
+    "chromium-browser",
+    "brave-browser",
+    "vivaldi",
+    "vivaldi-stable",
+];
+
+/// Resolve a browser name to its canonical form.
+///
+/// 1. Exact match → normalize (e.g. `chrome` → `google-chrome`).
+/// 2. Unique prefix match among known browsers → normalize that match.
+/// 3. Ambiguous prefix → error listing the candidates.
+/// 4. No match at all → pass through unchanged (unknown/custom browser).
+pub fn resolve_browser(input: &str) -> Result<String> {
+    if KNOWN_BROWSERS.contains(&input) {
+        return Ok(normalize_browser(input).to_string());
+    }
+    let matches: Vec<&str> = KNOWN_BROWSERS
+        .iter()
+        .copied()
+        .filter(|b| b.starts_with(input))
+        .collect();
+    match matches.len() {
+        0 => Ok(input.to_string()),
+        1 => Ok(normalize_browser(matches[0]).to_string()),
+        _ => Err(anyhow!(
+            "ambiguous browser '{}': matches {}",
+            input,
+            matches.join(", ")
+        )),
+    }
+}
+
 pub fn web(
     shortname: &str,
     private: bool,
     cli_browser: Option<&str>,
     cfg_browser: Option<&str>,
+    cfg_browser_flags: &HashMap<String, String>,
     db_path: &std::path::Path,
 ) -> Result<()> {
     let key = session::load_key()?;
@@ -40,11 +81,12 @@ pub fn web(
     let browser = cli_browser
         .or(item.browser.as_deref())
         .or(cfg_browser)
-        .map(normalize_browser);
+        .map(resolve_browser)
+        .transpose()?;
 
     match (browser, private) {
-        (Some(b), false) => open_with(b, &url),
-        (Some(b), true) => open_private_with(b, &url),
+        (Some(b), false) => open_with(&b, &url),
+        (Some(b), true) => open_private_with(&b, &url, cfg_browser_flags),
         (None, false) => {
             open::that(&url)?;
             println!("Opened '{shortname}' in browser.");
@@ -63,16 +105,22 @@ fn open_with(browser: &str, url: &str) -> Result<()> {
     Ok(())
 }
 
-fn open_private_with(browser: &str, url: &str) -> Result<()> {
+fn open_private_with(
+    browser: &str,
+    url: &str,
+    cfg_browser_flags: &HashMap<String, String>,
+) -> Result<()> {
     let flag = PRIVATE_FLAGS
         .iter()
         .find(|(name, _)| *name == browser)
         .map(|(_, flag)| *flag)
+        .or_else(|| cfg_browser_flags.get(browser).map(String::as_str))
         .ok_or_else(|| {
             anyhow!(
                 "Unknown private-mode flag for '{browser}'. \
                  Known browsers: firefox (--private-window), \
-                 google-chrome / chromium / brave-browser / vivaldi (--incognito)."
+                 google-chrome / chromium / brave-browser / vivaldi (--incognito). \
+                 Add a [browser_flags] entry in stash.toml to support other browsers."
             )
         })?;
 
@@ -141,5 +189,39 @@ mod tests {
     #[test]
     fn unknown_browser_passes_through() {
         assert_eq!(normalize_browser("opera"), "opera");
+    }
+
+    #[test]
+    fn resolve_exact_match() {
+        assert_eq!(resolve_browser("firefox").unwrap(), "firefox");
+        assert_eq!(resolve_browser("chromium").unwrap(), "chromium");
+        assert_eq!(resolve_browser("vivaldi").unwrap(), "vivaldi");
+    }
+
+    #[test]
+    fn resolve_alias_chrome() {
+        assert_eq!(resolve_browser("chrome").unwrap(), "google-chrome");
+    }
+
+    #[test]
+    fn resolve_unique_prefix() {
+        assert_eq!(resolve_browser("fi").unwrap(), "firefox");
+        assert_eq!(resolve_browser("fire").unwrap(), "firefox");
+        assert_eq!(resolve_browser("br").unwrap(), "brave-browser");
+        assert_eq!(resolve_browser("go").unwrap(), "google-chrome");
+        assert_eq!(resolve_browser("chromium-b").unwrap(), "chromium-browser");
+        assert_eq!(resolve_browser("vivaldi-").unwrap(), "vivaldi-stable");
+    }
+
+    #[test]
+    fn resolve_ambiguous_prefix_errors() {
+        assert!(resolve_browser("vi").is_err()); // vivaldi, vivaldi-stable
+        assert!(resolve_browser("ch").is_err()); // chrome, chromium, chromium-browser
+    }
+
+    #[test]
+    fn resolve_unknown_browser_passes_through() {
+        assert_eq!(resolve_browser("opera").unwrap(), "opera");
+        assert_eq!(resolve_browser("safari").unwrap(), "safari");
     }
 }

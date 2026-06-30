@@ -17,6 +17,11 @@ pub fn set_browser_all(
         ));
     }
 
+    let resolved = browser
+        .map(crate::commands::web::resolve_browser)
+        .transpose()?;
+    let browser = resolved.as_deref();
+
     let key = session::load_key()?;
     let db = Db::open(db_path, &key)?;
 
@@ -82,6 +87,11 @@ pub fn set_browser(
             "Provide a browser name, --clear, --private, or --no-private"
         ));
     }
+
+    let resolved = browser
+        .map(crate::commands::web::resolve_browser)
+        .transpose()?;
+    let browser = resolved.as_deref();
 
     let key = session::load_key()?;
     let db = Db::open(db_path, &key)?;

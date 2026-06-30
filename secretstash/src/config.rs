@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 #[derive(serde::Deserialize, Default)]
@@ -8,6 +9,16 @@ pub struct Config {
     pub session_timeout_minutes: Option<u64>,
     pub clipboard_clear_seconds: Option<u64>,
     pub browser: Option<String>,
+    /// Maps browser binary names to their private/incognito flag.
+    /// Extends the built-in browser list for browsers stash doesn't know about.
+    ///
+    /// ```toml
+    /// [browser_flags]
+    /// opera = "--private"
+    /// my-browser = "--incognito"
+    /// ```
+    #[serde(default)]
+    pub browser_flags: HashMap<String, String>,
 }
 
 pub fn data_dir() -> Result<PathBuf> {
@@ -149,6 +160,32 @@ mod tests {
     #[test]
     fn unknown_field_rejected() {
         assert!(toml::from_str::<Config>("unknown_key = true").is_err());
+    }
+
+    #[test]
+    fn browser_flags_absent_defaults_to_empty() {
+        let cfg: Config = toml::from_str("").unwrap();
+        assert!(cfg.browser_flags.is_empty());
+    }
+
+    #[test]
+    fn browser_flags_parsed() {
+        let cfg: Config = toml::from_str(
+            r#"
+[browser_flags]
+opera = "--private"
+my-browser = "--incognito"
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            cfg.browser_flags.get("opera").map(String::as_str),
+            Some("--private")
+        );
+        assert_eq!(
+            cfg.browser_flags.get("my-browser").map(String::as_str),
+            Some("--incognito")
+        );
     }
 
     #[test]

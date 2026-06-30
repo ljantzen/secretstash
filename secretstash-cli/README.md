@@ -63,6 +63,12 @@ db = "/mnt/usb/stash.db"
 session_timeout_minutes = 60   # default: 15; set to 0 to disable timeout
 clipboard_clear_seconds = 30   # clear clipboard N seconds after --copy; default: 0 (disabled)
 browser = "firefox"            # preferred browser for `stash web`
+
+# Private-mode flags for browsers not built in to stash.
+# Key = browser binary name, value = the flag that opens a private window.
+[browser_flags]
+opera          = "--private"
+my-browser     = "--incognito"
 ```
 
 ### Alternate database
@@ -353,9 +359,29 @@ Browser resolution order: `--browser` flag > per-item stored browser (`stash bro
 
 Private mode resolution order: `-p` flag > per-item stored private preference > off.
 
-Private-mode flags are known for: `firefox` (`--private-window`),
+**Browser name shorthand** — anywhere a browser name is accepted (`--browser`, `stash browser`, `stash add -b`), you can use the shortest unambiguous prefix of a known browser name instead of the full name:
+
+```sh
+stash web gh -b fi        # resolves to firefox
+stash web gh -b go        # resolves to google-chrome
+stash web gh -b brave     # resolves to brave-browser
+stash web gh -b vi        # error: ambiguous (vivaldi, vivaldi-stable)
+stash web gh -b vivaldi-  # resolves to vivaldi-stable
+```
+
+Unknown names (not in the built-in list) are passed through as-is, so custom browsers always use their exact binary name.
+
+**Built-in private-mode support:** `firefox` (`--private-window`),
 `google-chrome` / `chrome`, `chromium`, `chromium-browser`, `brave-browser`, `vivaldi`, `vivaldi-stable` (`--incognito`).
 `chrome` is accepted as an alias for `google-chrome`.
+
+**Custom browsers:** add a `[browser_flags]` section to `stash.toml` to enable private mode for any other browser:
+
+```toml
+[browser_flags]
+opera      = "--private"
+my-browser = "--incognito"
+```
 
 ### `stash browser <browser> <url1> [url2 ...] [--all] [--clear] [-a/--private | -n/--no-private]`
 

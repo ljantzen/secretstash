@@ -88,6 +88,7 @@ fn main() -> Result<()> {
             private,
             browser.as_deref(),
             cfg.browser.as_deref(),
+            &cfg.browser_flags,
             &db_path,
         ),
         Commands::Purge { force, shortname } => commands::purge::purge(&shortname, force, &db_path),
