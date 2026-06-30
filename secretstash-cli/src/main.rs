@@ -118,8 +118,9 @@ fn main() -> Result<()> {
         }
         Commands::Copy { shortname, dest } => commands::copy::copy(&shortname, &dest, &db_path),
         Commands::Browser {
-            shortname,
             browser,
+            shortnames,
+            all,
             clear,
             private,
             no_private,
@@ -131,13 +132,21 @@ fn main() -> Result<()> {
             } else {
                 None
             };
-            commands::browser::set_browser(
-                &shortname,
-                browser.as_deref(),
-                clear,
-                private_pref,
-                &db_path,
-            )
+            let browser_opt = if clear { None } else { Some(browser.as_str()) };
+            if all {
+                commands::browser::set_browser_all(browser_opt, clear, private_pref, &db_path)
+            } else {
+                for shortname in &shortnames {
+                    commands::browser::set_browser(
+                        shortname,
+                        browser_opt,
+                        clear,
+                        private_pref,
+                        &db_path,
+                    )?;
+                }
+                Ok(())
+            }
         }
         Commands::Import { file, overwrite } => {
             commands::import::import(overwrite, file.as_deref(), &db_path)

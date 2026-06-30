@@ -141,19 +141,24 @@ pub enum Commands {
     },
     /// Copy an item to a new shortname
     Copy { shortname: String, dest: String },
-    /// Set or clear the stored browser preference for a URL item
+    /// Set or clear the stored browser preference for one or more URL items
     Browser {
-        shortname: String,
         /// Browser binary to use (e.g. firefox, chromium)
-        browser: Option<String>,
+        browser: String,
+        /// URL item name(s) to configure; omit when using --all
+        #[arg(required_unless_present = "all", conflicts_with = "all")]
+        shortnames: Vec<String>,
+        /// Apply to all URL items in the vault
+        #[arg(long)]
+        all: bool,
         /// Remove the stored browser preference
         #[arg(long)]
         clear: bool,
         /// Always open this URL in private/incognito mode
-        #[arg(long, conflicts_with = "no_private")]
+        #[arg(short = 'p', long, conflicts_with = "no_private")]
         private: bool,
         /// Clear the stored private-mode preference
-        #[arg(long, conflicts_with = "private")]
+        #[arg(short = 'n', long, conflicts_with = "private")]
         no_private: bool,
     },
     /// Import items from a JSON export file (reads stdin if FILE is omitted)
@@ -622,16 +627,16 @@ mod tests {
 
     #[test]
     fn browser_set() {
-        let cli = parse(&["stash", "browser", "myurl", "firefox"]).unwrap();
+        let cli = parse(&["stash", "browser", "firefox", "myurl"]).unwrap();
         if let Commands::Browser {
-            shortname,
             browser,
+            shortnames,
             clear,
             ..
         } = cli.command
         {
-            assert_eq!(shortname, "myurl");
-            assert_eq!(browser.as_deref(), Some("firefox"));
+            assert_eq!(browser, "firefox");
+            assert_eq!(shortnames, ["myurl"]);
             assert!(!clear);
         } else {
             panic!("wrong variant");
@@ -639,17 +644,29 @@ mod tests {
     }
 
     #[test]
-    fn browser_clear() {
-        let cli = parse(&["stash", "browser", "myurl", "--clear"]).unwrap();
+    fn browser_set_multiple() {
+        let cli = parse(&["stash", "browser", "firefox", "url1", "url2", "url3"]).unwrap();
         if let Commands::Browser {
-            shortname,
             browser,
-            clear,
+            shortnames,
             ..
         } = cli.command
         {
-            assert_eq!(shortname, "myurl");
-            assert!(browser.is_none());
+            assert_eq!(browser, "firefox");
+            assert_eq!(shortnames, ["url1", "url2", "url3"]);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn browser_clear() {
+        let cli = parse(&["stash", "browser", "firefox", "myurl", "--clear"]).unwrap();
+        if let Commands::Browser {
+            shortnames, clear, ..
+        } = cli.command
+        {
+            assert_eq!(shortnames, ["myurl"]);
             assert!(clear);
         } else {
             panic!("wrong variant");
@@ -658,15 +675,15 @@ mod tests {
 
     #[test]
     fn browser_private_flag() {
-        let cli = parse(&["stash", "browser", "myurl", "--private"]).unwrap();
+        let cli = parse(&["stash", "browser", "firefox", "myurl", "--private"]).unwrap();
         if let Commands::Browser {
-            shortname,
+            shortnames,
             private,
             no_private,
             ..
         } = cli.command
         {
-            assert_eq!(shortname, "myurl");
+            assert_eq!(shortnames, ["myurl"]);
             assert!(private);
             assert!(!no_private);
         } else {
@@ -676,7 +693,7 @@ mod tests {
 
     #[test]
     fn browser_no_private_flag() {
-        let cli = parse(&["stash", "browser", "myurl", "--no-private"]).unwrap();
+        let cli = parse(&["stash", "browser", "firefox", "myurl", "--no-private"]).unwrap();
         if let Commands::Browser {
             private,
             no_private,
@@ -691,9 +708,8 @@ mod tests {
     }
 
     #[test]
-    fn browser_no_args_is_ok_at_parse_level() {
-        let cli = parse(&["stash", "browser", "myurl"]).unwrap();
-        assert!(matches!(cli.command, Commands::Browser { .. }));
+    fn browser_requires_at_least_one_shortname() {
+        assert!(parse(&["stash", "browser", "firefox"]).is_err());
     }
 
     // ── import ────────────────────────────────────────────────────────────
