@@ -103,6 +103,8 @@ stash auth login --timeout 0    # never expire
 stash add note todo  "Buy milk"
 stash add url  gh    "https://github.com"
 stash add url  work  "https://example.com" --browser firefox
+stash add url  priv  "https://example.com" --private       # always open in private mode
+stash add url  combo "https://example.com" -b firefox -p   # browser + private at creation
 
 # Add an item with a title
 stash add url gh "https://github.com" --title "GitHub"
@@ -135,9 +137,13 @@ stash web gh
 stash web gh --private          # incognito / private mode
 stash web gh --browser firefox  # use a specific browser (overrides config)
 
-# Store a permanent per-item private-mode preference
-stash browser gh --private      # stash web gh will always open in private mode
-stash browser gh --no-private   # clear that preference
+# Set stored browser preference for one or more URL items
+stash browser firefox gh                    # set browser for one item
+stash browser firefox gh work archive       # set browser for multiple items at once
+stash browser firefox --all                 # set browser for every URL in the vault
+stash browser firefox gh --clear            # clear stored browser preference
+stash browser firefox gh -p                 # always open in private mode (-a / --private)
+stash browser firefox gh --no-private       # clear private-mode preference
 
 # List all items (TITLE column shown when any item has a title)
 stash list
@@ -178,10 +184,6 @@ stash search --type url
 
 # Combine: pattern + tag + type
 stash search --tag work --type url "meeting"
-
-# Change or clear the stored browser preference for a URL item
-stash browser gh firefox
-stash browser gh --clear
 
 # Delete an item and all its history
 stash purge todo
@@ -289,9 +291,11 @@ stash add <url|note> <name> [TEXT] [options]
 | `-e`, `--edit` | Open `$EDITOR` to compose content |
 | `--stdin` | Read content from standard input |
 | `-g`, `--tag <TAG>` | Attach a tag (repeatable: `--tag work --tag personal`) |
-| `-b`, `--browser <BROWSER>` | Store a preferred browser for this URL item (url items only) |
+| `-b`, `--browser <BROWSER>` | Store a preferred browser (url items only) |
+| `-p`, `--private` | Always open this URL in private/incognito mode (url items only) |
+| `-n`, `--no-private` | Clear the stored private-mode preference (url items only) |
 
-Exactly one of `TEXT`, `--edit`, or `--stdin` must be supplied.
+Exactly one of `TEXT`, `--edit`, or `--stdin` must be supplied. `--private` and `--no-private` are mutually exclusive.
 
 ### `stash show <shortname>`
 
@@ -353,26 +357,34 @@ Private-mode flags are known for: `firefox` (`--private-window`),
 `google-chrome` / `chrome`, `chromium`, `chromium-browser`, `brave-browser`, `vivaldi`, `vivaldi-stable` (`--incognito`).
 `chrome` is accepted as an alias for `google-chrome`.
 
-### `stash browser <shortname> [<browser>] [--clear] [--private | --no-private]`
+### `stash browser <browser> <url1> [url2 ...] [--all] [--clear] [-a/--private | -n/--no-private]`
 
-Sets or clears browser preferences stored with a `url`-type item.
+Sets or clears browser preferences stored on one or more `url`-type items.
 
-| Option | Description |
-|--------|-------------|
-| `<browser>` | Browser binary to store (e.g. `firefox`) |
-| `--clear` | Remove the stored browser preference |
-| `--private` | Always open this URL in private/incognito mode |
-| `--no-private` | Clear the stored private-mode preference |
+```
+stash browser <BROWSER> <URL>... [options]
+stash browser <BROWSER> --all    [options]
+```
 
-Options can be combined: `stash browser gh firefox --private` sets both at once.
-`--private` and `--no-private` are mutually exclusive.
+| Argument / Option | Description |
+|-------------------|-------------|
+| `<BROWSER>` | Browser binary to store (e.g. `firefox`, `chromium`) |
+| `<URL>...` | One or more URL item shortnames to update |
+| `--all` | Apply to every URL item in the vault (conflicts with named shortnames) |
+| `--clear` | Remove the stored browser preference (`<BROWSER>` is ignored) |
+| `-a`, `--private` | Always open this URL in private/incognito mode |
+| `-n`, `--no-private` | Clear the stored private-mode preference |
+
+Flags can be combined: e.g. `stash browser firefox gh -a` sets both browser and private mode in one command. `--private` and `--no-private` are mutually exclusive.
 
 ```sh
-stash browser gh firefox          # set stored browser
-stash browser gh --clear          # remove stored browser preference
-stash browser gh --private        # always open in private mode
-stash browser gh --no-private     # clear private-mode preference
-stash browser gh firefox --private  # set browser and private mode together
+stash browser firefox gh                  # set stored browser for one item
+stash browser firefox gh work archive     # set browser for several items at once
+stash browser firefox --all               # set browser for every URL in the vault
+stash browser firefox gh --clear          # remove stored browser preference
+stash browser firefox gh -a               # always open in private mode
+stash browser firefox gh --no-private     # clear private-mode preference
+stash browser firefox gh -a --clear       # clear browser pref, set private mode
 ```
 
 ### `stash list`
