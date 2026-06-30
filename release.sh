@@ -92,6 +92,9 @@ update_version() {
     # secretstash dependency pinned inside secretstash-cli
     sed -i "s|secretstash = { path = \"../secretstash\", version = \"$current_version\" }|secretstash = { path = \"../secretstash\", version = \"$new_version\" }|" secretstash-cli/Cargo.toml
 
+    # Keep Cargo.lock in sync with the bumped versions
+    cargo update -p secretstash -p secretstash-cli
+
     print_success "Version updated to $new_version"
 }
 
@@ -364,6 +367,7 @@ main() {
 
         print_info "Committing version change..."
         jj commit -m "Bump versions to $new_version"
+        jj bookmark set main -r @-
         print_success "Version commit created"
         echo ""
 
@@ -397,7 +401,8 @@ main() {
 
     if $publish; then
         if publish_to_crates "$new_version"; then
-            echo "crates.io: https://crates.io/crates/$REPO_NAME/v$new_version"
+            echo "crates.io: https://crates.io/crates/secretstash/$new_version"
+            echo "          https://crates.io/crates/secretstash-cli/$new_version"
         else
             print_error "Release partially complete - tag pushed but crates.io publication failed"
             exit 1
