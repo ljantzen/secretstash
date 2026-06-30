@@ -13,6 +13,7 @@ pub fn add(
     text: Option<&str>,
     title: Option<&str>,
     browser: Option<&str>,
+    private: Option<bool>,
     db_path: &std::path::Path,
 ) -> Result<()> {
     if edit && from_stdin {
@@ -20,6 +21,11 @@ pub fn add(
     }
     if browser.is_some() && item_type != "url" {
         return Err(anyhow!("--browser is only valid for URL items"));
+    }
+    if private.is_some() && item_type != "url" {
+        return Err(anyhow!(
+            "--private/--no-private is only valid for URL items"
+        ));
     }
 
     let key = session::load_key()?;
@@ -50,6 +56,10 @@ pub fn add(
     }
 
     let item_id = db.insert_item(shortname, item_type, &content, title, browser)?;
+
+    if let Some(p) = private {
+        db.set_private(shortname, if p { Some(true) } else { None })?;
+    }
 
     let mut seen = std::collections::HashSet::new();
     for tag in tags {

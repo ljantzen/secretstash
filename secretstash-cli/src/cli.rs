@@ -46,6 +46,12 @@ pub enum Commands {
         /// Preferred browser for opening this URL (url items only)
         #[arg(short = 'b', long)]
         browser: Option<String>,
+        /// Always open this URL in private/incognito mode (url items only)
+        #[arg(short = 'p', long, conflicts_with = "no_private")]
+        private: bool,
+        /// Clear the stored private-mode preference (url items only)
+        #[arg(short = 'n', long, conflicts_with = "private")]
+        no_private: bool,
         /// Content text
         text: Option<String>,
     },

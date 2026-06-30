@@ -42,18 +42,30 @@ fn main() -> Result<()> {
             title,
             tags,
             browser,
+            private,
+            no_private,
             text,
-        } => commands::add::add(
-            &item_type.to_string(),
-            &shortname,
-            edit,
-            stdin,
-            &tags,
-            text.as_deref(),
-            title.as_deref(),
-            browser.as_deref(),
-            &db_path,
-        ),
+        } => {
+            let private_pref = if private {
+                Some(true)
+            } else if no_private {
+                Some(false)
+            } else {
+                None
+            };
+            commands::add::add(
+                &item_type.to_string(),
+                &shortname,
+                edit,
+                stdin,
+                &tags,
+                text.as_deref(),
+                title.as_deref(),
+                browser.as_deref(),
+                private_pref,
+                &db_path,
+            )
+        }
         Commands::Show {
             verbose,
             copy,
