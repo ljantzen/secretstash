@@ -1,6 +1,6 @@
 [package]
 name = "secretstash-cli"
-version = "1.1.0"
+version = "2.0.0"
 edition = "2024"
 description = "Encrypted command-line manager for notes, URLs, and secrets"
 license = "MIT"
@@ -15,4 +15,4 @@ path = "src/main.rs"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
-secretstash = { path = "../secretstash", version = "1.1.0" }
+secretstash = { path = "../secretstash", version = "2.0.0" }
