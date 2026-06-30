@@ -498,6 +498,83 @@ mod tests {
     }
 
     #[test]
+    fn add_browser_flag() {
+        let cli = parse(&["stash", "add", "url", "k", "--browser", "firefox"]).unwrap();
+        if let Commands::Add { browser, .. } = cli.command {
+            assert_eq!(browser.as_deref(), Some("firefox"));
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn add_browser_short_flag() {
+        let cli = parse(&["stash", "add", "url", "k", "-b", "chromium"]).unwrap();
+        if let Commands::Add { browser, .. } = cli.command {
+            assert_eq!(browser.as_deref(), Some("chromium"));
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn add_private_flag() {
+        let cli = parse(&["stash", "add", "url", "k", "--private"]).unwrap();
+        if let Commands::Add {
+            private,
+            no_private,
+            ..
+        } = cli.command
+        {
+            assert!(private);
+            assert!(!no_private);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn add_private_short_flag() {
+        let cli = parse(&["stash", "add", "url", "k", "-p"]).unwrap();
+        if let Commands::Add { private, .. } = cli.command {
+            assert!(private);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn add_no_private_flag() {
+        let cli = parse(&["stash", "add", "url", "k", "--no-private"]).unwrap();
+        if let Commands::Add {
+            private,
+            no_private,
+            ..
+        } = cli.command
+        {
+            assert!(!private);
+            assert!(no_private);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn add_no_private_short_flag() {
+        let cli = parse(&["stash", "add", "url", "k", "-n"]).unwrap();
+        if let Commands::Add { no_private, .. } = cli.command {
+            assert!(no_private);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn add_private_and_no_private_conflict() {
+        assert!(parse(&["stash", "add", "url", "k", "--private", "--no-private"]).is_err());
+    }
+
+    #[test]
     fn parse_tag() {
         let cli = parse(&["stash", "tag", "myitem", "work", "personal"]).unwrap();
         if let Commands::Tag { shortname, tags } = cli.command {
@@ -716,6 +793,29 @@ mod tests {
     #[test]
     fn browser_requires_at_least_one_shortname() {
         assert!(parse(&["stash", "browser", "firefox"]).is_err());
+    }
+
+    #[test]
+    fn browser_all_flag() {
+        let cli = parse(&["stash", "browser", "firefox", "--all"]).unwrap();
+        if let Commands::Browser {
+            browser,
+            all,
+            shortnames,
+            ..
+        } = cli.command
+        {
+            assert_eq!(browser, "firefox");
+            assert!(all);
+            assert!(shortnames.is_empty());
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn browser_all_conflicts_with_shortnames() {
+        assert!(parse(&["stash", "browser", "firefox", "url1", "--all"]).is_err());
     }
 
     // ── import ────────────────────────────────────────────────────────────
