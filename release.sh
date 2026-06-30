@@ -366,14 +366,11 @@ main() {
         fi
 
         print_info "Committing version change..."
-        jj commit -m "Bump versions to $new_version"
-        jj bookmark set main -r @-
-        print_success "Version commit created"
-        echo ""
-
-        print_info "Pushing commits to remote..."
+        jj describe -m "Bump versions to $new_version"
+        jj bookmark set main -r @
         jj git push --bookmark main
-        print_success "Commits pushed to remote"
+        jj new --no-advance-bookmarks
+        print_success "Version commit created and pushed"
         echo ""
 
         # Step 1: Create and push tag

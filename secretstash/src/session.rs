@@ -7,6 +7,10 @@ use std::{
 use zeroize::Zeroizing;
 
 /// Returns true if the session key was stored in the system keychain.
+///
+/// The session file is only written as a fallback when the keychain is
+/// unavailable — otherwise the vault key would sit in plaintext on disk
+/// even on systems where the keychain works, defeating its purpose.
 pub fn save_key(key: &[u8; 32], timeout_minutes: u64) -> Result<bool> {
     let expiry = if timeout_minutes == 0 {
         u64::MAX
@@ -17,8 +21,10 @@ pub fn save_key(key: &[u8; 32], timeout_minutes: u64) -> Result<bool> {
 
     let used_keychain = crate::keychain::save(&content);
 
-    let path = crate::config::session_path()?;
-    write_session_file(&path, content.as_bytes())?;
+    if !used_keychain {
+        let path = crate::config::session_path()?;
+        write_session_file(&path, content.as_bytes())?;
+    }
 
     Ok(used_keychain)
 }
@@ -61,7 +67,9 @@ fn refresh_session(key: &[u8; 32], timeout_minutes: u64) -> Result<()> {
     }
     let expiry = now_secs() + timeout_minutes * 60;
     let content = encode_session(expiry, timeout_minutes, key);
-    let _ = crate::keychain::save(&content);
+    if crate::keychain::save(&content) {
+        return Ok(());
+    }
     let path = crate::config::session_path()?;
     write_session_file(&path, content.as_bytes())
 }
