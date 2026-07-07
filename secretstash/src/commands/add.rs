@@ -1,5 +1,6 @@
 use anyhow::{Result, anyhow};
 use std::io::{self, Read, Write};
+use std::path::PathBuf;
 
 use crate::{db::Db, session};
 
@@ -85,7 +86,9 @@ pub fn add(
 
 pub fn open_in_editor(initial: &str) -> Result<String> {
     let editor = std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string());
-    let mut tmp = tempfile::NamedTempFile::new()?;
+    let mut tmp = tempfile::Builder::new()
+        .prefix(".stash-edit-")
+        .tempfile_in(secure_tmp_dir())?;
     tmp.write_all(initial.as_bytes())?;
     tmp.flush()?;
 
@@ -99,4 +102,52 @@ pub fn open_in_editor(initial: &str) -> Result<String> {
     }
 
     Ok(std::fs::read_to_string(tmp.path())?)
+}
+
+/// Prefer a tmpfs-backed, per-user directory for the editor scratch file so
+/// plaintext secrets don't linger on persistent storage after the file is
+/// unlinked. Falls back to the regular temp dir when unavailable.
+fn secure_tmp_dir() -> PathBuf {
+    resolve_secure_tmp_dir(std::env::var("XDG_RUNTIME_DIR").ok().as_deref())
+}
+
+/// Pure resolution logic, separated from env-var access so it's testable
+/// without mutating process-wide environment state.
+fn resolve_secure_tmp_dir(xdg_runtime_dir: Option<&str>) -> PathBuf {
+    if let Some(dir) = xdg_runtime_dir {
+        let path = PathBuf::from(dir);
+        if path.is_dir() {
+            return path;
+        }
+    }
+    std::env::temp_dir()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_secure_tmp_dir_prefers_existing_xdg_runtime_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(
+            resolve_secure_tmp_dir(Some(dir.path().to_str().unwrap())),
+            dir.path()
+        );
+    }
+
+    #[test]
+    fn resolve_secure_tmp_dir_falls_back_when_unset() {
+        assert_eq!(resolve_secure_tmp_dir(None), std::env::temp_dir());
+    }
+
+    #[test]
+    fn resolve_secure_tmp_dir_falls_back_when_not_a_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let bogus = dir.path().join("does-not-exist");
+        assert_eq!(
+            resolve_secure_tmp_dir(Some(bogus.to_str().unwrap())),
+            std::env::temp_dir()
+        );
+    }
 }
