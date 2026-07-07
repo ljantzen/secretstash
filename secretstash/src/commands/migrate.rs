@@ -33,7 +33,7 @@ pub fn migrate(db_path: &std::path::Path) -> Result<()> {
         ));
     }
 
-    let password = rpassword::prompt_password("Master password: ")?;
+    let password = Zeroizing::new(rpassword::prompt_password("Master password: ")?);
     migrate_with_password(db_path, &password)
 }
 

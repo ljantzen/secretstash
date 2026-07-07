@@ -1,15 +1,18 @@
 use std::io::IsTerminal;
 
 use anyhow::{Result, anyhow};
+use zeroize::Zeroizing;
 
 use crate::{config, crypto, db::Db, session};
 
 const MIN_PASSWORD_LEN: usize = 12;
 
-fn read_password_from_stdin() -> Result<String> {
-    let mut line = String::new();
+fn read_password_from_stdin() -> Result<Zeroizing<String>> {
+    let mut line = Zeroizing::new(String::new());
     std::io::stdin().read_line(&mut line)?;
-    Ok(line.trim_end_matches(['\n', '\r']).to_string())
+    let trimmed_len = line.trim_end_matches(['\n', '\r']).len();
+    line.truncate(trimmed_len);
+    Ok(line)
 }
 
 pub fn login(db_path: &std::path::Path, session_timeout_minutes: u64) -> Result<()> {
@@ -25,7 +28,7 @@ pub fn login(db_path: &std::path::Path, session_timeout_minutes: u64) -> Result<
 
     let piped = !std::io::stdin().is_terminal();
 
-    let password = if piped {
+    let password: Zeroizing<String> = if piped {
         let pw = read_password_from_stdin()?;
         if is_new_vault && pw.len() < MIN_PASSWORD_LEN {
             return Err(anyhow!(
@@ -34,19 +37,19 @@ pub fn login(db_path: &std::path::Path, session_timeout_minutes: u64) -> Result<
         }
         pw
     } else if is_new_vault {
-        let pw = rpassword::prompt_password("Create master password: ")?;
+        let pw = Zeroizing::new(rpassword::prompt_password("Create master password: ")?);
         if pw.len() < MIN_PASSWORD_LEN {
             return Err(anyhow!(
                 "Master password must be at least {MIN_PASSWORD_LEN} characters"
             ));
         }
-        let confirm = rpassword::prompt_password("Confirm master password: ")?;
-        if pw != confirm {
+        let confirm = Zeroizing::new(rpassword::prompt_password("Confirm master password: ")?);
+        if *pw != *confirm {
             return Err(anyhow!("Passwords do not match"));
         }
         pw
     } else {
-        rpassword::prompt_password("Master password: ")?
+        Zeroizing::new(rpassword::prompt_password("Master password: ")?)
     };
 
     let salt = if is_new_vault {
@@ -139,19 +142,19 @@ pub fn reset(db_path: &std::path::Path) -> Result<()> {
         .map(|s| s.trim().to_string())
         .map_err(|_| anyhow!("No vault found — run 'stash auth login' first"))?;
 
-    let old_password = rpassword::prompt_password("Current master password: ")?;
+    let old_password = Zeroizing::new(rpassword::prompt_password("Current master password: ")?);
     let old_key = crypto::derive_key(&old_password, &old_salt)?;
 
     let db = Db::open(db_path, &old_key).map_err(|_| anyhow!("Incorrect password"))?;
 
-    let new_password = rpassword::prompt_password("New master password: ")?;
+    let new_password = Zeroizing::new(rpassword::prompt_password("New master password: ")?);
     if new_password.len() < MIN_PASSWORD_LEN {
         return Err(anyhow!(
             "Master password must be at least {MIN_PASSWORD_LEN} characters"
         ));
     }
-    let confirm = rpassword::prompt_password("Confirm new master password: ")?;
-    if new_password != confirm {
+    let confirm = Zeroizing::new(rpassword::prompt_password("Confirm new master password: ")?);
+    if *new_password != *confirm {
         return Err(anyhow!("Passwords do not match"));
     }
 
