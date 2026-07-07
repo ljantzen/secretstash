@@ -1,6 +1,6 @@
 # Release Notes
 
-## Unreleased (2.0.0)
+## v2.0.1 — 2026-07-07
 
 **Security**
 - Reject non-http(s) content in `stash web`, preventing browser-flag injection via item content.
@@ -11,10 +11,18 @@
 - Don't misreport real I/O errors as "wrong password" in `Db::open`.
 
 **Added**
+- `private` key in `stash.toml`: a default privacy mode for URL items with no per-item preference, mirroring the existing `browser` default.
+
+**Internal**
+- Added `cargo audit` target to the justfile.
+- `release.sh`: bump the bookmark before pushing.
+
+## v2.0.0 — 2026-06-30
+
+**Added**
 - `-p`/`--private` and `-n`/`--no-private` flags on `stash add url`.
 - Browser name prefix matching (e.g. `-b fire` resolves to `firefox`) and a `[browser_flags]` section in `stash.toml` for custom browsers' private-mode flags.
 - `stash tags` command; `search --tag` is now repeatable for multi-tag search.
-- `private` key in `stash.toml`: a default privacy mode for URL items with no per-item preference, mirroring the existing `browser` default.
 
 **Changed**
 - `stash browser` command syntax reworked (see README).
