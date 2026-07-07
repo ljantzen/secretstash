@@ -63,6 +63,7 @@ db = "/mnt/usb/stash.db"
 session_timeout_minutes = 60   # default: 15; set to 0 to disable timeout
 clipboard_clear_seconds = 30   # clear clipboard N seconds after --copy; default: 0 (disabled)
 browser = "firefox"            # preferred browser for `stash web`
+private = true                 # default privacy mode for URL items with no per-item preference
 
 # Private-mode flags for browsers not built in to stash.
 # Key = browser binary name, value = the flag that opens a private window.
@@ -357,7 +358,7 @@ If the item has a stored private-mode preference (set via `stash browser
 
 Browser resolution order: `--browser` flag > per-item stored browser (`stash browser`) > `browser` in `stash.toml` > system default.
 
-Private mode resolution order: `-p` flag > per-item stored private preference > off.
+Private mode resolution order: `-p` flag > per-item stored private preference > `private` in `stash.toml` > off.
 
 **Browser name shorthand** — anywhere a browser name is accepted (`--browser`, `stash browser`, `stash add -b`), you can use the shortest unambiguous prefix of a known browser name instead of the full name:
 

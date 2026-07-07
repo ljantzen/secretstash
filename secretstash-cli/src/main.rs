@@ -88,6 +88,7 @@ fn main() -> Result<()> {
             private,
             browser.as_deref(),
             cfg.browser.as_deref(),
+            cfg.private,
             &cfg.browser_flags,
             &db_path,
         ),

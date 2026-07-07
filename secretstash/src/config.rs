@@ -9,6 +9,9 @@ pub struct Config {
     pub session_timeout_minutes: Option<u64>,
     pub clipboard_clear_seconds: Option<u64>,
     pub browser: Option<String>,
+    /// Default privacy mode for URL items that have no per-item preference
+    /// (set via `stash add --private` or `stash browser --private`).
+    pub private: Option<bool>,
     /// Maps browser binary names to their private/incognito flag.
     /// Extends the built-in browser list for browsers stash doesn't know about.
     ///
@@ -160,6 +163,18 @@ mod tests {
     #[test]
     fn unknown_field_rejected() {
         assert!(toml::from_str::<Config>("unknown_key = true").is_err());
+    }
+
+    #[test]
+    fn private_absent_defaults_to_none() {
+        let cfg: Config = toml::from_str("").unwrap();
+        assert_eq!(cfg.private, None);
+    }
+
+    #[test]
+    fn private_parsed() {
+        let cfg: Config = toml::from_str("private = true").unwrap();
+        assert_eq!(cfg.private, Some(true));
     }
 
     #[test]

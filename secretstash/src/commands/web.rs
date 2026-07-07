@@ -57,6 +57,7 @@ pub fn web(
     private: bool,
     cli_browser: Option<&str>,
     cfg_browser: Option<&str>,
+    cfg_private: Option<bool>,
     cfg_browser_flags: &HashMap<String, String>,
     db_path: &std::path::Path,
 ) -> Result<()> {
@@ -82,7 +83,7 @@ pub fn web(
              This guards against browser flags being injected via item content."
         ));
     }
-    let private = private || item.private.unwrap_or(false);
+    let private = private || item.private.unwrap_or_else(|| cfg_private.unwrap_or(false));
 
     let browser = cli_browser
         .or(item.browser.as_deref())
