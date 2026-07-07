@@ -53,6 +53,9 @@ clippy-fix:
 lint: fmt-check clippy
     @echo "Linting passed"
 
+audit:
+    cargo audit
+
 # Documentation
 doc:
     cargo doc -p secretstash --no-deps --open
