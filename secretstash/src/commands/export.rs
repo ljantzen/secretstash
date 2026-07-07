@@ -86,7 +86,7 @@ pub fn export(include_history: bool, output: Option<&Path>, db_path: &Path) -> R
     let json = serde_json::to_string_pretty(&file)?;
 
     if let Some(path) = output {
-        std::fs::write(path, &json)?;
+        write_export_file(path, json.as_bytes())?;
         eprintln!("Exported to {}", path.display());
     } else {
         let stdout = io::stdout();
@@ -96,4 +96,67 @@ pub fn export(include_history: bool, output: Option<&Path>, db_path: &Path) -> R
     }
 
     Ok(())
+}
+
+// Write the export file with 0600 permissions on Unix so plaintext secrets
+// don't land on disk world/group-readable under the process umask. The
+// existing file (if any) is removed first so there is no window in which it
+// exists with permissive permissions.
+#[cfg(unix)]
+fn write_export_file(path: &Path, json: &[u8]) -> Result<()> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    if path.exists() {
+        std::fs::remove_file(path)?;
+    }
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)?;
+    f.write_all(json)?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn write_export_file(path: &Path, json: &[u8]) -> Result<()> {
+    std::fs::write(path, json)?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn export_file_has_0600_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("export.json");
+        write_export_file(&path, b"{}").unwrap();
+
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn write_export_file_writes_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("export.json");
+        write_export_file(&path, b"{\"version\":1}").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"version\":1}");
+    }
+
+    #[test]
+    fn write_export_file_overwrites_existing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("export.json");
+        std::fs::write(&path, b"old content").unwrap();
+
+        write_export_file(&path, b"new content").unwrap();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "new content");
+    }
 }
