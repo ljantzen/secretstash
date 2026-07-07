@@ -1,5 +1,5 @@
 use anyhow::{Result, anyhow};
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, ErrorCode, params};
 use std::path::Path;
 use zeroize::Zeroizing;
 
@@ -46,6 +46,17 @@ fn hex_key(key: &[u8; 32]) -> Zeroizing<String> {
     s
 }
 
+/// SQLCipher reports `SQLITE_NOTADB` when the key is wrong (the decrypted
+/// first page fails the file-format sanity check) or when the file predates
+/// whole-database encryption. Any other error (I/O, permissions, disk full,
+/// ...) is a real failure unrelated to the password.
+fn is_bad_key_error(e: &rusqlite::Error) -> bool {
+    matches!(
+        e,
+        rusqlite::Error::SqliteFailure(se, _) if se.code == ErrorCode::NotADatabase
+    )
+}
+
 impl Db {
     /// Open (or create) a SQLCipher-encrypted database at `path` using `key`.
     /// Returns an error if the file exists but the key is wrong, with a hint
@@ -63,7 +74,10 @@ impl Db {
              PRAGMA foreign_keys=ON; \
              PRAGMA secure_delete=ON;",
         )
-        .map_err(|_| {
+        .map_err(|e| {
+            if !is_bad_key_error(&e) {
+                return anyhow::Error::from(e);
+            }
             if path.exists() && !path.with_extension("salt").exists() {
                 anyhow!(
                     "Cannot open vault: it appears to be in the old unencrypted format. \
@@ -446,6 +460,31 @@ impl Db {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── is_bad_key_error ──────────────────────────────────────────────────
+
+    #[test]
+    fn is_bad_key_error_true_for_not_a_database() {
+        let err = rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_NOTADB),
+            None,
+        );
+        assert!(is_bad_key_error(&err));
+    }
+
+    #[test]
+    fn is_bad_key_error_false_for_other_sqlite_errors() {
+        let err = rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_IOERR),
+            None,
+        );
+        assert!(!is_bad_key_error(&err));
+    }
+
+    #[test]
+    fn is_bad_key_error_false_for_non_sqlite_errors() {
+        assert!(!is_bad_key_error(&rusqlite::Error::QueryReturnedNoRows));
+    }
 
     // ── Db::open error messages ───────────────────────────────────────────
 
