@@ -316,7 +316,7 @@ mod tests {
     use super::*;
     use base64::{Engine, engine::general_purpose::STANDARD as B64};
     use chacha20poly1305::{
-        ChaCha20Poly1305, Key, Nonce,
+        ChaCha20Poly1305, Nonce,
         aead::{Aead, KeyInit},
     };
     use rand_core::{OsRng, TryRngCore};
@@ -326,12 +326,11 @@ mod tests {
 
     /// Encrypt a field with ChaCha20-Poly1305, mirroring the old vault format.
     fn field_encrypt(key: &[u8; 32], plaintext: &[u8]) -> (Vec<u8>, Vec<u8>) {
-        let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+        let cipher = ChaCha20Poly1305::new(key.into());
         let mut nonce_bytes = [0u8; 12];
         OsRng.try_fill_bytes(&mut nonce_bytes).unwrap();
-        let ct = cipher
-            .encrypt(Nonce::from_slice(&nonce_bytes), plaintext)
-            .unwrap();
+        let nonce: &Nonce = (&nonce_bytes).into();
+        let ct = cipher.encrypt(nonce, plaintext).unwrap();
         (ct, nonce_bytes.to_vec())
     }
 

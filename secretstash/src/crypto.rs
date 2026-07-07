@@ -2,7 +2,7 @@ use anyhow::{Result, anyhow};
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use chacha20poly1305::{
-    ChaCha20Poly1305, Key, Nonce,
+    ChaCha20Poly1305, Nonce,
     aead::{Aead, KeyInit},
 };
 use rand_core::{OsRng, TryRngCore};
@@ -32,8 +32,10 @@ pub fn decrypt(
     ciphertext: &[u8],
     nonce_bytes: &[u8],
 ) -> Result<Zeroizing<Vec<u8>>> {
-    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
-    let nonce = Nonce::from_slice(nonce_bytes);
+    let cipher = ChaCha20Poly1305::new(key.into());
+    let nonce: &Nonce = nonce_bytes
+        .try_into()
+        .map_err(|_| anyhow!("Decryption failed (wrong key or corrupted data)"))?;
     cipher
         .decrypt(nonce, ciphertext)
         .map(Zeroizing::new)
@@ -45,12 +47,12 @@ mod tests {
     use super::*;
 
     fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<(Vec<u8>, Vec<u8>)> {
-        let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+        let cipher = ChaCha20Poly1305::new(key.into());
         let mut nonce_bytes = [0u8; 12];
         OsRng
             .try_fill_bytes(&mut nonce_bytes)
             .expect("OS RNG failed");
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce: &Nonce = (&nonce_bytes).into();
         let ciphertext = cipher
             .encrypt(nonce, plaintext)
             .map_err(|_| anyhow!("Encryption failed"))?;
