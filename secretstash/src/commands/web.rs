@@ -76,6 +76,12 @@ pub fn web(
     }
 
     let url = item.content.trim().to_string();
+    if !is_http_url(&url) {
+        return Err(anyhow!(
+            "Refusing to open '{shortname}': content is not an http(s) URL. \
+             This guards against browser flags being injected via item content."
+        ));
+    }
     let private = private || item.private.unwrap_or(false);
 
     let browser = cli_browser
@@ -94,6 +100,12 @@ pub fn web(
         }
         (None, true) => open_private_discover(&url),
     }
+}
+
+/// Only http(s) content may be passed to a browser as an argv entry — anything
+/// else (e.g. `--gpu-launcher=payload`) risks being interpreted as a flag.
+fn is_http_url(url: &str) -> bool {
+    url.starts_with("http://") || url.starts_with("https://")
 }
 
 fn open_with(browser: &str, url: &str) -> Result<()> {
@@ -173,6 +185,21 @@ fn browser_err(browser: &str, e: std::io::Error) -> anyhow::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn is_http_url_accepts_http_and_https() {
+        assert!(is_http_url("http://example.com"));
+        assert!(is_http_url("https://example.com"));
+    }
+
+    #[test]
+    fn is_http_url_rejects_flag_like_and_other_schemes() {
+        assert!(!is_http_url("--gpu-launcher=payload"));
+        assert!(!is_http_url("-incognito"));
+        assert!(!is_http_url("file:///etc/passwd"));
+        assert!(!is_http_url("ftp://example.com"));
+        assert!(!is_http_url(""));
+    }
 
     #[test]
     fn chrome_normalizes_to_google_chrome() {
