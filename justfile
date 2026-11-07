@@ -63,6 +63,16 @@ doc:
 doc-check:
     cargo doc --no-deps 2>&1 | grep -E "warning|error" || true
 
+# User manual (mdbook)
+book-build:
+    mdbook build book
+
+book-serve:
+    mdbook serve book --open
+
+book-clean:
+    mdbook clean book
+
 # Development
 run *ARGS:
     cargo run -p secretstash-cli -- {{ARGS}}

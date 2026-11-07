@@ -22,7 +22,9 @@ This repository contains two crates:
 
 ## Getting started
 
-See the **[CLI README](secretstash-cli/README.md)** for installation, configuration, and a full command reference.
+**📖 [Read the user manual](https://ljantzen.github.io/secretstash/)** for installation, configuration, and the full `stash` command reference. Its source lives in [`book/`](book/); build it locally with `just book-build` or serve it live with `just book-serve`.
+
+See the **[CLI README](secretstash-cli/README.md)** for a quick overview of the `stash` binary.
 
 See the **[library README](secretstash/README.md)** if you want to embed the encrypted vault in your own application.
 
@@ -31,6 +33,7 @@ See the **[library README](secretstash/README.md)** if you want to embed the enc
 ```
 secretstash/        Core library (Db, crypto, session, config, clipboard, keychain)
 secretstash-cli/    CLI binary (`stash`)
+book/               User manual source (mdBook)
 .github/workflows/  CI and release pipelines
 ```
 

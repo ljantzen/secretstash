@@ -1,0 +1,14 @@
+[book]
+title = "stash User Manual"
+description = "Encrypted command-line manager for notes, URLs, and secrets."
+authors = ["Leif Jantzen"]
+language = "en"
+src = "src"
+
+[output.html]
+default-theme = "light"
+git-repository-url = "https://github.com/ljantzen/secretstash"
+edit-url-template = "https://github.com/ljantzen/secretstash/edit/main/book/{path}"
+
+[output.html.search]
+limit-results = 20
